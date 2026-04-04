@@ -1,6 +1,8 @@
 package com.monkeys.projectmanager
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,23 +15,40 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.NavigationItem
+import com.monkeys.projectmanager.utils.createNote
+import com.monkeys.projectmanager.utils.editLast
+import com.monkeys.projectmanager.utils.getTask
+import monkeys_pm.sharedui.generated.resources.Res
+import monkeys_pm.sharedui.generated.resources.create_note
+import monkeys_pm.sharedui.generated.resources.edit
+import monkeys_pm.sharedui.generated.resources.exit
+import monkeys_pm.sharedui.generated.resources.get_task
+import monkeys_pm.sharedui.generated.resources.think
+import org.jetbrains.compose.resources.stringResource
+import kotlin.time.Clock
 
 
 @Composable
 fun SideNavigationDrawer(
     isExpanded: Boolean,
+    selectedItem: Int,
+    onItemClick: (Int) -> Unit,
     onToggle: () -> Unit
 ) {
-    val width by animateDpAsState(if (isExpanded) 240.dp else 80.dp)
+    val width by animateDpAsState(if (isExpanded) 240.dp else 60.dp)
 
     Surface(
         modifier = Modifier.width(width).fillMaxHeight(),
-        color = Color(0xFFF7F7F7),
+        color = Color(0xFFFFFFFF),
         shadowElevation = 8.dp
     ) {
         Column(
@@ -39,20 +58,27 @@ fun SideNavigationDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(180.dp)
+                    .wrapContentHeight()
                     .clip(RoundedCornerShape(bottomEnd = 40.dp))
-                    .background(Color(0xFF3F3361))
-                    .padding(16.dp)
+                    .background(Color(0xFF3B2D60))
+                    .padding(vertical = 10.dp)
             ) {
                 Column {
-                    IconButton(onClick = onToggle) {
+                    IconButton(
+                        onClick = onToggle,
+                        modifier = Modifier
+                            .padding(start = 8.dp, end = 8.dp)
+                            .size(40.dp)
+                    ) {
                         Icon(Icons.Default.Menu, contentDescription = null, tint = Color.White)
                     }
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(10.dp))
                     Icon(
                         imageVector = Icons.Default.AccountCircle,
                         contentDescription = null,
-                        modifier = Modifier.size(60.dp),
+                        modifier = Modifier
+                            .padding(start = 8.dp, end = 8.dp)
+                            .size(40.dp),
                         tint = Color.White
                     )
                     if (isExpanded) {
@@ -60,31 +86,73 @@ fun SideNavigationDrawer(
                             "Username",
                             color = Color.White,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 8.dp)
+                            modifier = Modifier.height(24.dp).padding(top = 5.dp, start = 10.dp, end = 10.dp)
                         )
+                    }
+                    else{
+                        Spacer(Modifier.height(24.dp))
                     }
                 }
             }
 
             Spacer(Modifier.height(24.dp))
 
-            val items = listOf(
-                NavigationItem("Дай задачу", Icons.AutoMirrored.Filled.List),
-                NavigationItem("Создать заметку", Icons.Default.BookmarkBorder),
-                NavigationItem("Изменить", Icons.Default.Edit),
-                NavigationItem("Думать", Icons.Default.Lightbulb, hasNotification = true)
-            )
+            val notesNotEmpty by rememberSaveable {
+                mutableStateOf(
+                    LocalApi.getNotes().isNotEmpty()
+                )
+            }
+            val canEditNote by rememberSaveable {
+                mutableStateOf(
+                    notesNotEmpty
+                            && (Clock.System.now().toEpochMilliseconds()
+                                    - LocalApi.getNotes()
+                                        .sortedByDescending {
+                                            it.cratedDate
+                                        }[0].cratedDate
+                                    ) <= 30 * 6 * 10000
+                )
+            }
+            val items = buildList {
+                add(NavigationItem(getTask, stringResource(Res.string.get_task), Icons.AutoMirrored.Filled.List))
+                add(NavigationItem(createNote, stringResource(Res.string.create_note), Icons.Default.BookmarkBorder))
+                if (canEditNote)
+                    add(NavigationItem(editLast, stringResource(Res.string.edit), Icons.Default.Edit))
+                add(NavigationItem(
+                    com.monkeys.projectmanager.utils.think,
+                    stringResource(Res.string.think),
+                    Icons.Default.Lightbulb,
+                    hasNotification = notesNotEmpty
+                ))
+            }
 
             items.forEach { item ->
-                NavigationRow(item, isExpanded)
+                val animatedBgColor by animateColorAsState(
+                    targetValue = if (selectedItem == item.id) Color(0xFF3B2D60) else Color(0xFFE9E9E9),
+                    animationSpec = tween(durationMillis = 200)
+                )
+
+                NavigationRow(
+                    item,
+                    isExpanded,
+                    isSelected = item.id == selectedItem,
+                    modifier = Modifier
+                        .padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .clip(RoundedCornerShape(bottomEnd = 100.dp, topEnd = 100.dp))
+                        .background(animatedBgColor)
+                        .clickable { onItemClick(item.id) }
+                        .padding(horizontal = 8.dp)
+                )
             }
 
             Spacer(Modifier.weight(1f))
 
             NavigationRow(
-                NavigationItem("Выйти", Icons.AutoMirrored.Filled.ExitToApp),
+                NavigationItem(4, stringResource(Res.string.exit), Icons.AutoMirrored.Filled.ExitToApp),
                 isExpanded,
-                isBottom = true
+                horizontalArrangement = Arrangement.Center
             )
             Spacer(Modifier.height(16.dp))
         }
@@ -95,28 +163,32 @@ fun SideNavigationDrawer(
 fun NavigationRow(
     item: NavigationItem,
     isExpanded: Boolean,
-    isBottom: Boolean = false
+    isSelected: Boolean = false,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
+    modifier: Modifier = Modifier
+        .padding(top = 4.dp, bottom = 4.dp, end = 4.dp, start = 4.dp)
+        .fillMaxWidth()
+        .height(50.dp)
+        .clip(CircleShape)
+        .background(Color(0xFFE9E9E9))
+        .clickable {  }
+        .padding(horizontal = 8.dp)
 ) {
-    val backgroundColor = if (item.title == "Дай задачу") Color(0xFF3F3361) else Color.Transparent
-    val contentColor = if (item.title == "Дай задачу") Color.White else Color.Black
+    val animatedContentColor by animateColorAsState(
+        targetValue = if (isSelected) Color.White else Color.Black,
+        animationSpec = tween(durationMillis = 200)
+    )
 
     Row(
-        modifier = Modifier
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .fillMaxWidth()
-            .height(50.dp)
-            .clip(CircleShape)
-            .background(if (isBottom) Color(0xFFE0E0E0).copy(alpha = 0.5f) else backgroundColor)
-            .clickable { /* Handle click */ }
-            .padding(horizontal = 16.dp),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (isExpanded) Arrangement.Start else Arrangement.Center
+        horizontalArrangement = horizontalArrangement
     ) {
         Box {
             Icon(
                 item.icon,
-                contentDescription = null,
-                tint = contentColor,
+                contentDescription = item.title,
+                tint = animatedContentColor,
                 modifier = Modifier.size(24.dp)
             )
             if (item.hasNotification) {
@@ -134,7 +206,7 @@ fun NavigationRow(
             Spacer(Modifier.width(16.dp))
             Text(
                 text = item.title,
-                color = contentColor,
+                color = animatedContentColor,
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1
             )

@@ -3,4 +3,12 @@
     <string name="run">Run</string>
     <string name="stop">Stop</string>
     <string name="theme">Theme</string>
+
+    <string name="get_task">Дай задачу</string>
+    <string name="create_note">Создать заметку</string>
+    <string name="go_to_create_tasks">Перейти к созданию задач</string>
+    <string name="no_tasks">Нет задач</string>
+    <string name="edit">Изменить</string>
+    <string name="think">Думать</string>
+    <string name="exit">Выйти</string>
 </resources>
