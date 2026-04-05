@@ -9,6 +9,6 @@ data class Task @OptIn(ExperimentalUuidApi::class) constructor(
     var title: String,
     var description: String,
     var status: Int,
-    val cratedDate: Long,
+    val createdDate: Long,
     var blockedUntil: Long
 )

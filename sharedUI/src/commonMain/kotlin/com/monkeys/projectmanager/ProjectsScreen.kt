@@ -23,23 +23,35 @@ import com.monkeys.projectmanager.utils.projectStatusOff
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 @Composable
-fun ProjectsScreen() {
+fun ProjectsScreen(
+    clearId: () -> Unit,
+    clearShow: () -> Unit,
+    showAllProjects: Boolean,
+    id: Uuid? = null,
+    onClickGoTo: (Int, Uuid?, Boolean) -> Unit
+) {
     var showDialog by remember { mutableStateOf(false) }
-    val projects by remember {
-        derivedStateOf {
-            LocalApi.getProjects().sortedWith(
-                compareBy<Project> { it.status != projectStatusOff }
-                    .thenByDescending { it.cratedDate }
-            )
-        }
-    }
     val hasOffProjects by remember {
         derivedStateOf { LocalApi.getProjects().any { it.status == projectStatusOff } }
     }
+    val projects by remember {
+        derivedStateOf {
+            hasOffProjects
+            LocalApi.getProjects().sortedWith(
+                compareBy<Project> { it.status != projectStatusOff }
+                    .thenByDescending { it.createdDate }
+            )
+        }
+    }
     var selectedProject by remember { mutableStateOf<Project?>(null) }
+
+    if (id != null) {
+        selectedProject = LocalApi.getProject(id)
+    }
 
     if (selectedProject == null){
         Column(
@@ -77,6 +89,7 @@ fun ProjectsScreen() {
 
                                 ProjectItemRow(
                                     project,
+                                    hasOffProjects = hasOffProjects,
                                     onClick = { selectedProject = project }
                                 )
                             }
@@ -113,9 +126,17 @@ fun ProjectsScreen() {
             }
         }
     }
-    else ProjectDetailsScreen(selectedProject!!, onBack = {
-        selectedProject = null
-    })
+    else ProjectDetailsScreen(
+        selectedProject!!,
+        onBack = {
+            selectedProject = null
+            clearId()
+            clearShow()
+        },
+        clearShow = clearShow,
+        showAllProjects = showAllProjects,
+        onClickGoTo = onClickGoTo
+    )
 
     if (showDialog) {
         CreateAlert(
@@ -133,6 +154,7 @@ fun ProjectsScreen() {
 @Composable
 fun ProjectItemRow(
     project: Project,
+    hasOffProjects: Boolean,
     onClick: () -> Unit
 ) {
     Column {
@@ -141,7 +163,7 @@ fun ProjectItemRow(
                 .fillMaxWidth()
                 .clickable { onClick() }
                 .background(
-                    if (project.status == projectStatusOff) Color(0xFFFFEBEE)
+                    if (project.status == projectStatusOff && hasOffProjects) Color(0xFFFFEBEE)
                     else Color(0xFFE8F5E9)
                 )
                 .padding(vertical = 24.dp, horizontal = 20.dp),
@@ -157,7 +179,7 @@ fun ProjectItemRow(
                 color = Color.Black
             )
 
-            if (project.status == projectStatusOff) {
+            if (project.status == projectStatusOff && hasOffProjects) {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,

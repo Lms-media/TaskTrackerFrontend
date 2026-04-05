@@ -9,5 +9,5 @@ data class Project @OptIn(ExperimentalUuidApi::class) constructor(
     var description: String,
     var status: Int,
     var tasks: MutableList<Task>,
-    val cratedDate: Long
+    val createdDate: Long
 )

@@ -7,5 +7,5 @@ data class Note @OptIn(ExperimentalUuidApi::class) constructor(
     val id: Uuid,
     var title: String,
     var text: String,
-    val cratedDate: Long
+    val createdDate: Long
 )

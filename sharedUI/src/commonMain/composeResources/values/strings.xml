@@ -23,6 +23,7 @@
     <string name="description">Описание</string>
     <string name="cancel">Отмена</string>
     <string name="no_all_projects_full">Внимание! Не у всех проектов есть активные задачи!</string>
+    <string name="no_project_full">Внимание! У проекта нет активной задачи!</string>
     <string name="back">Назад</string>
     <string name="create_task">Создать задачу</string>
     <string name="create_mark">Сделать пометку</string>
@@ -31,4 +32,18 @@
     <string name="select_block_date">Выберите срок блокировки</string>
     <string name="get_back">Вернуться назад</string>
     <string name="blocked_until">Проект заблокирован до:</string>
+    <string name="task_description">Описание задачи</string>
+    <string name="close">Завершить</string>
+    <string name="select_date">Выберите дату</string>
+    <string name="select_time">Выберите время</string>
+    <string name="time_passed">Это время уже прошло!</string>
+    <string name="continue_button">Далее</string>
+    <string name="ok">ОК</string>
+    <string name="task_archive">Архив задач</string>
+    <string name="no_task_archive">В архиве пока нет задач</string>
+    <string name="note_saved">Заметка сохранена</string>
+    <string name="delete">Удалить</string>
+    <string name="note_title">Заголовок заметки</string>
+    <string name="note_text">Текст заметки...</string>
+    <string name="save">Сохранить</string>
 </resources>

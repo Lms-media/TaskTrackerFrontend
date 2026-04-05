@@ -1,5 +1,7 @@
 package com.monkeys.projectmanager.utils
 
+import kotlinx.datetime.TimeZone
+
 const val statusActive = 0
 const val statusClosed = 1
 const val statusBlocked = 2
@@ -14,3 +16,5 @@ const val think = 3
 
 const val tabNotes = 0
 const val tabProjects = 1
+
+const val timeZone = 3 * 60 * 60 * 1000

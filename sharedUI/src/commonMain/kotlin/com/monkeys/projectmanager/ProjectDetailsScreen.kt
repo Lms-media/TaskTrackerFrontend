@@ -2,8 +2,10 @@ package com.monkeys.projectmanager
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -22,27 +24,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.projectStatusOff
 import com.monkeys.projectmanager.utils.statusActive
 import com.monkeys.projectmanager.utils.statusBlocked
+import com.monkeys.projectmanager.utils.statusClosed
+import com.monkeys.projectmanager.utils.tabProjects
+import com.monkeys.projectmanager.utils.timeZone
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 @Composable
 fun ProjectDetailsScreen(
     project: Project,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    clearShow: () -> Unit,
+    showAllProjects: Boolean,
+    onClickGoTo: (Int, Uuid?, Boolean) -> Unit
 ) {
-    val tasks by remember {
+    val tasks by remember(project.id) {
         derivedStateOf { project.tasks }
     }
-    val hasActiveTask by remember {
+    val hasActiveTask by remember(project.id) {
         derivedStateOf { tasks.any { it.status == statusActive } }
     }
-    val activeBlockTask by remember {
+    val activeBlockTask by remember(project.id) {
         derivedStateOf {
             tasks.find {
                 it.status == statusBlocked && it.blockedUntil > Clock.System.now().toEpochMilliseconds()
@@ -53,18 +63,26 @@ fun ProjectDetailsScreen(
     var createTask by remember { mutableStateOf(false) }
     var createBlockTask by remember { mutableStateOf(false) }
 
+    var showArchive by remember { mutableStateOf(false) }
+
+    val closedTasks by remember {
+        derivedStateOf { project.tasks.filter { it.status == statusClosed } }
+    }
+
+    val scrollState = rememberScrollState()
+
     Box(modifier = Modifier.fillMaxSize()){
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF5F5F5))
+                .verticalScroll(scrollState)
                 .blur(if (activeBlockTask != null) 12.dp else 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = 16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth().wrapContentHeight().padding(horizontal = 16.dp)) {
                 IconButton(
                     onClick = onBack,
-                    modifier = Modifier.align(Alignment.CenterStart),
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = Color(0xFF3B2D60),
                         contentColor = Color.White
@@ -75,6 +93,17 @@ fun ProjectDetailsScreen(
                         contentDescription = stringResource(Res.string.back),
                     )
                 }
+                if (!hasActiveTask)
+                    Text(
+                        text = stringResource(Res.string.no_project_full),
+                        color = Color.Red,
+                        fontSize = 30.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 36.sp
+                    )
             }
             Surface(
                 modifier = Modifier
@@ -124,7 +153,9 @@ fun ProjectDetailsScreen(
                     icon = Icons.Default.Archive,
                     text = stringResource(Res.string.archive),
                     modifier = Modifier.weight(1f),
-                    onClick = { }
+                    onClick = {
+                        showArchive = true
+                    }
                 )
                 ProjectActionButton(
                     icon = Icons.Outlined.AccessTime,
@@ -136,6 +167,7 @@ fun ProjectDetailsScreen(
                     }
                 )
             }
+            Spacer(Modifier.height(16.dp))
         }
 
         if (activeBlockTask != null) {
@@ -196,6 +228,16 @@ fun ProjectDetailsScreen(
                     statusActive,
                     Clock.System.now().toEpochMilliseconds()
                 )
+                if (showAllProjects){
+                    val nextProject = LocalApi.getProjects()
+                        .find { it.status == projectStatusOff }
+                    if (nextProject != null) {
+                        onBack()
+                        onClickGoTo(tabProjects, nextProject.id, true)
+                    } else {
+                        clearShow()
+                    }
+                }
             },
             stringResource(Res.string.create_task),
         )
@@ -209,9 +251,16 @@ fun ProjectDetailsScreen(
             onConfirm = {date ->
                 LocalApi.blockProject(
                     project.id,
-                    date
+                    date - timeZone
                 )
             }
+        )
+    }
+
+    if (showArchive) {
+        ArchiveAlert(
+            tasks = closedTasks,
+            onDismiss = { showArchive = false }
         )
     }
 }
@@ -250,6 +299,6 @@ fun ProjectActionButton(
 }
 
 fun formatTime(millis: Long): String {
-    val instant = Instant.fromEpochMilliseconds(millis)
+    val instant = Instant.fromEpochMilliseconds(millis + timeZone)
     return instant.toString()
 }

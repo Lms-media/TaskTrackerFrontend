@@ -14,37 +14,22 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.monkeys.projectmanager.utils.LocalApi
-import com.monkeys.projectmanager.utils.NavigationItem
-import com.monkeys.projectmanager.utils.createNote
-import com.monkeys.projectmanager.utils.editLast
-import com.monkeys.projectmanager.utils.getTask
-import com.monkeys.projectmanager.utils.projectStatusOff
-import com.monkeys.projectmanager.utils.tabNotes
-import com.monkeys.projectmanager.utils.tabProjects
-import com.monkeys.projectmanager.utils.think
-import monkeys_pm.sharedui.generated.resources.Res
-import monkeys_pm.sharedui.generated.resources.control
-import monkeys_pm.sharedui.generated.resources.create_note
-import monkeys_pm.sharedui.generated.resources.edit
-import monkeys_pm.sharedui.generated.resources.get_task
-import monkeys_pm.sharedui.generated.resources.notes
-import monkeys_pm.sharedui.generated.resources.think
+import com.monkeys.projectmanager.utils.*
+import kotlinx.coroutines.delay
+import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.uuid.ExperimentalUuidApi
 
 
+@OptIn(ExperimentalUuidApi::class)
 @Composable
 fun SideNavigationDrawer(
     isExpanded: Boolean,
@@ -54,7 +39,17 @@ fun SideNavigationDrawer(
     onTabClick: (Int) -> Unit,
     onToggle: () -> Unit
 ) {
+    var currentTime by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            currentTime = Clock.System.now().toEpochMilliseconds()
+            delay(30000L.milliseconds)
+        }
+    }
+
     val width by animateDpAsState(if (isExpanded) 240.dp else 60.dp)
+    var createNoteAlert by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.width(width).fillMaxHeight(),
@@ -107,24 +102,22 @@ fun SideNavigationDrawer(
 
             Spacer(Modifier.height(24.dp))
 
-            val notesNotEmpty by rememberSaveable {
-                mutableStateOf(
-                    LocalApi.getNotes().isNotEmpty()
-                )
+            val notesNotEmpty by remember {
+                derivedStateOf { LocalApi.getNotes().isNotEmpty() }
             }
             val hasOffProjects by remember {
                 derivedStateOf { LocalApi.getProjects().any { it.status == projectStatusOff } }
             }
-            val canEditNote by rememberSaveable {
-                mutableStateOf(
-                    notesNotEmpty
-                            && (Clock.System.now().toEpochMilliseconds()
-                                    - LocalApi.getNotes()
-                                        .sortedByDescending {
-                                            it.cratedDate
-                                        }[0].cratedDate
-                                    ) <= 30 * 6 * 10000
-                )
+            val canEditNote by remember {
+                derivedStateOf {
+                    val now = currentTime
+                    if (!notesNotEmpty) return@derivedStateOf false
+                    val lastNote = LocalApi.getNotes().maxByOrNull { it.createdDate }
+                    lastNote?.let {
+                        //(now - it.createdDate) <= 10_000L
+                        (now - it.createdDate) <= 1_800_000L
+                    } ?: false
+                }
             }
             val items = buildList {
                 add(NavigationItem(getTask, stringResource(Res.string.get_task), Icons.AutoMirrored.Filled.List))
@@ -152,7 +145,10 @@ fun SideNavigationDrawer(
                         .height(50.dp)
                         .clip(RoundedCornerShape(bottomEnd = 100.dp, topEnd = 100.dp))
                         .background(animatedBgColor)
-                        .clickable { onItemClick(item.id) }
+                        .clickable {
+                            if (item.id == createNote) createNoteAlert = true
+                            else onItemClick(item.id)
+                        }
                         .padding(horizontal = 8.dp)
                 )
             }
@@ -195,6 +191,15 @@ fun SideNavigationDrawer(
             Spacer(Modifier.height(16.dp))
         }
     }
+
+    if (createNoteAlert)
+        CreateNoteAlert(
+            onDismiss = {createNoteAlert = false},
+            onConfirm = {title, description ->
+                createNoteAlert = false
+                LocalApi.createNote(title, description)
+            }
+        )
 }
 
 @Composable

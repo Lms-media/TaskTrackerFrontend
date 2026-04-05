@@ -93,9 +93,25 @@ object LocalApi: IApi {
     }
     override fun closeTask(id: Uuid): Boolean {
         val index = tasks.indexOfFirst { it.id == id }
+
         return if (index != -1) {
-            tasks[index].status = statusClosed
-            getProject(tasks[index].projectId)!!.status = projectStatusOff
+            val task = tasks[index]
+
+            val projIndex = projects.indexOfFirst { it.id == task.projectId }
+            val project = projects[projIndex]
+
+            task.status = statusClosed
+            project.status = projectStatusOff
+
+            val taskProjIndex = project.tasks.indexOfFirst { it.id == id }
+            project.tasks.removeAt(taskProjIndex)
+            project.tasks.add(taskProjIndex, task)
+
+            projects.removeAt(projIndex)
+            projects.add(projIndex, project)
+
+            tasks.removeAt(index)
+            tasks.add(index, task)
             true
         } else false
     }

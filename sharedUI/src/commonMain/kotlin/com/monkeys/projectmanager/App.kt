@@ -9,7 +9,10 @@ import com.monkeys.projectmanager.theme.AppTheme
 import com.monkeys.projectmanager.utils.getTask
 import com.monkeys.projectmanager.utils.tabProjects
 import com.monkeys.projectmanager.utils.think
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
+@OptIn(ExperimentalUuidApi::class)
 @Preview
 @Composable
 fun App(
@@ -19,6 +22,8 @@ fun App(
     var isExpanded by remember { mutableStateOf(false) }
     var selectedItem by remember { mutableStateOf(getTask) }
     var selectedTab by remember { mutableStateOf(-1) }
+    var selectedProjId by remember { mutableStateOf<Uuid?>(null) }
+    var showAllProjects by remember { mutableStateOf(false) }
 
     Row(Modifier.fillMaxSize()) {
         SideNavigationDrawer(
@@ -35,10 +40,20 @@ fun App(
         MainContent(
             selectedItem,
             selectedTab,
-            onClickGoTo = {
+            projectId = selectedProjId,
+            clearId = {
+                selectedProjId = null
+            },
+            onClickGoTo = { tab, id, showAll ->
                 selectedItem = think
-                selectedTab = it
-            }
+                selectedTab = tab
+                selectedProjId = id
+                showAllProjects = showAll
+            },
+            clearShow = {
+                showAllProjects = false
+            },
+            showAllProjects = showAllProjects
         )
     }
 }
