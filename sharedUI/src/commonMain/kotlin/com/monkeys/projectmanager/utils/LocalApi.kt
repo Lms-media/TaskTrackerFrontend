@@ -1,5 +1,6 @@
 package com.monkeys.projectmanager.utils
 
+import androidx.compose.runtime.mutableStateListOf
 import com.monkeys.projectmanager.models.Note
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.models.Task
@@ -9,9 +10,9 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 object LocalApi: IApi {
-    private val projects = mutableListOf<Project>()
-    private val tasks = mutableListOf<Task>()
-    private val notes = mutableListOf<Note>()
+    private val projects = mutableStateListOf<Project>()
+    private val tasks = mutableStateListOf<Task>()
+    private val notes = mutableStateListOf<Note>()
 
     override fun getProjects(): List<Project> = projects
     override fun getTasks(): List<Task> = tasks
@@ -25,7 +26,7 @@ object LocalApi: IApi {
                 name,
                 description,
                 projectStatusOff,
-                mutableListOf(),
+                mutableStateListOf(),
                 Clock.System.now().toEpochMilliseconds()
             )
         )
@@ -59,8 +60,9 @@ object LocalApi: IApi {
         status: Int,
         blockedUntil: Long
     ): Uuid? {
-        val project = getProject(projectId)
-        if (project?.status == projectStatusOff){
+        val index = projects.indexOfFirst { it.id == projectId }
+        val project = projects[index]
+        if (project.status == projectStatusOff){
             val taskId = Uuid.random()
             val task = Task(
                 taskId,
@@ -71,9 +73,12 @@ object LocalApi: IApi {
                 Clock.System.now().toEpochMilliseconds(),
                 blockedUntil
             )
+            tasks.add(task)
 
             project.tasks.add(task)
             project.status = projectStatusOn
+            projects.removeAt(index)
+            projects.add(index, project)
 
             return taskId
         }

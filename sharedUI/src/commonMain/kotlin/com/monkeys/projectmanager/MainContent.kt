@@ -1,5 +1,7 @@
 package com.monkeys.projectmanager
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -14,32 +16,81 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.monkeys.projectmanager.utils.LocalApi
-import com.monkeys.projectmanager.utils.statusActive
-import com.monkeys.projectmanager.utils.tabProjects
-import monkeys_pm.sharedui.generated.resources.IndieFlower_Regular
-import monkeys_pm.sharedui.generated.resources.Res
-import monkeys_pm.sharedui.generated.resources.go_to_create_tasks
-import monkeys_pm.sharedui.generated.resources.no_tasks
+import com.monkeys.projectmanager.utils.*
+import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun MainContent(
     selectedItem: Int,
+    selectedTab: Int,
     onClickGoTo: (Int) -> Unit,
 ) {
-    when (selectedItem) {
-        0 -> {
-            val activeTasks by remember {
-                derivedStateOf {
-                    LocalApi.getTasks().filter { it.status == statusActive }
-                }
-            }
-            if (activeTasks.isNotEmpty()) showTask()
-            else showGoTo(onClickGoTo)
+    val activeTasks by remember {
+        derivedStateOf {
+            LocalApi.getTasks().filter { it.status == statusActive }
         }
     }
+    AnimatedContent(
+        targetState = selectedItem to selectedTab,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(200)) + scaleIn(initialScale = 0.95f))
+                .togetherWith(fadeOut(animationSpec = tween(200)))
+        },
+        label = "ScreenTransition"
+    ) { (targetItem, targetTab) ->
+        when (targetItem) {
+            getTask -> {
+                if (activeTasks.isNotEmpty()) showTask()
+                else showGoTo(onClickGoTo)
+            }
+            think -> {
+                when (targetTab) {
+                    tabProjects -> ProjectsScreen()
+                    tabNotes -> NotesScreen()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotesScreen() {
+    if (LocalApi.getNotes().isNotEmpty())
+//        LazyColumn(
+//            modifier = Modifier.fillMaxSize(),
+//            contentPadding = PaddingValues(bottom = 100.dp)
+//        ) {
+//            items(LocalApi.getProjects()) { project ->
+//                ProjectItemRow(project)
+//            }
+//        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "None",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color(0xFFA9A9A9),
+                maxLines = 1
+            )
+        }
+    else
+        Box(
+            modifier = Modifier
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stringResource(Res.string.no_notes),
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color(0xFFA9A9A9),
+                maxLines = 1
+            )
+        }
 }
 
 @Composable

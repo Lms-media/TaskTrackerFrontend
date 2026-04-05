@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,11 +30,16 @@ import com.monkeys.projectmanager.utils.NavigationItem
 import com.monkeys.projectmanager.utils.createNote
 import com.monkeys.projectmanager.utils.editLast
 import com.monkeys.projectmanager.utils.getTask
+import com.monkeys.projectmanager.utils.projectStatusOff
+import com.monkeys.projectmanager.utils.tabNotes
+import com.monkeys.projectmanager.utils.tabProjects
+import com.monkeys.projectmanager.utils.think
 import monkeys_pm.sharedui.generated.resources.Res
+import monkeys_pm.sharedui.generated.resources.control
 import monkeys_pm.sharedui.generated.resources.create_note
 import monkeys_pm.sharedui.generated.resources.edit
-import monkeys_pm.sharedui.generated.resources.exit
 import monkeys_pm.sharedui.generated.resources.get_task
+import monkeys_pm.sharedui.generated.resources.notes
 import monkeys_pm.sharedui.generated.resources.think
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
@@ -41,7 +49,9 @@ import kotlin.time.Clock
 fun SideNavigationDrawer(
     isExpanded: Boolean,
     selectedItem: Int,
+    selectedTab: Int,
     onItemClick: (Int) -> Unit,
+    onTabClick: (Int) -> Unit,
     onToggle: () -> Unit
 ) {
     val width by animateDpAsState(if (isExpanded) 240.dp else 60.dp)
@@ -102,6 +112,9 @@ fun SideNavigationDrawer(
                     LocalApi.getNotes().isNotEmpty()
                 )
             }
+            val hasOffProjects by remember {
+                derivedStateOf { LocalApi.getProjects().any { it.status == projectStatusOff } }
+            }
             val canEditNote by rememberSaveable {
                 mutableStateOf(
                     notesNotEmpty
@@ -118,11 +131,8 @@ fun SideNavigationDrawer(
                 add(NavigationItem(createNote, stringResource(Res.string.create_note), Icons.Default.BookmarkBorder))
                 if (canEditNote)
                     add(NavigationItem(editLast, stringResource(Res.string.edit), Icons.Default.Edit))
-                add(NavigationItem(
-                    com.monkeys.projectmanager.utils.think,
-                    stringResource(Res.string.think),
-                    Icons.Default.Lightbulb,
-                    hasNotification = notesNotEmpty
+                add(NavigationItem(think, stringResource(Res.string.think), Icons.Default.Lightbulb,
+                    hasNotification = notesNotEmpty || hasOffProjects
                 ))
             }
 
@@ -147,13 +157,41 @@ fun SideNavigationDrawer(
                 )
             }
 
-            Spacer(Modifier.weight(1f))
+            if (selectedItem == think){
+                val tabs = buildList {
+                    add(NavigationItem(
+                        tabProjects,
+                        stringResource(Res.string.control),
+                        Icons.Outlined.Keyboard,
+                        hasNotification = hasOffProjects
+                    ))
+                    add(NavigationItem(tabNotes,
+                        stringResource(Res.string.notes),
+                        Icons.Outlined.Inbox,
+                        hasNotification = notesNotEmpty))
+                }
+                tabs.forEach { tab ->
+                    val animatedBgColor by animateColorAsState(
+                        targetValue = if (selectedTab == tab.id) Color(0xFF3B2D60) else Color(0xFFE9E9E9),
+                        animationSpec = tween(durationMillis = 200)
+                    )
 
-            NavigationRow(
-                NavigationItem(4, stringResource(Res.string.exit), Icons.AutoMirrored.Filled.ExitToApp),
-                isExpanded,
-                horizontalArrangement = Arrangement.Center
-            )
+                    NavigationRow(
+                        tab,
+                        isExpanded,
+                        isSelected = tab.id == selectedTab,
+                        modifier = Modifier
+                            .padding(top = 4.dp, bottom = 4.dp, start = 8.dp, end = 8.dp)
+                            .fillMaxWidth()
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(animatedBgColor)
+                            .clickable { onTabClick(tab.id) }
+                            .padding(horizontal = 10.dp)
+                    )
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
         }
     }

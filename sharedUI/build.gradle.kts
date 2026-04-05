@@ -22,8 +22,8 @@ kotlin {
             api(libs.compose.material3)
 
             implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
-
             implementation("org.jetbrains.compose.components:components-resources:1.10.3")
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
         }
 
         commonTest.dependencies {
