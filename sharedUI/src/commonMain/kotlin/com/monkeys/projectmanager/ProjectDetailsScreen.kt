@@ -23,7 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Project
-import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.ApiAdapter
 import com.monkeys.projectmanager.utils.projectStatusOff
 import com.monkeys.projectmanager.utils.statusActive
 import com.monkeys.projectmanager.utils.statusBlocked
@@ -221,7 +221,7 @@ fun ProjectDetailsScreen(
                 createTask = false
             },
             onConfirm = {name, desc ->
-                LocalApi.createTask(
+                ApiAdapter.createTask(
                     project.id,
                     name,
                     desc,
@@ -229,7 +229,7 @@ fun ProjectDetailsScreen(
                     Clock.System.now().toEpochMilliseconds()
                 )
                 if (showAllProjects){
-                    val nextProject = LocalApi.getProjects()
+                    val nextProject = ApiAdapter.getProjects()
                         .find { it.status == projectStatusOff }
                     if (nextProject != null) {
                         onBack()
@@ -249,7 +249,7 @@ fun ProjectDetailsScreen(
                 createBlockTask = false
             },
             onConfirm = {date ->
-                LocalApi.blockProject(
+                ApiAdapter.blockProject(
                     project.id,
                     date - timeZone
                 )

@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Note
-import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.ApiAdapter
 
 @Composable
 fun EditNoteScreen(
@@ -80,7 +79,7 @@ fun EditNoteScreen(
                 onClick = {
                     note.title = title
                     note.text = content
-                    LocalApi.editNote(note)
+                    ApiAdapter.editNote(note)
                     onSave()
                 },
                 modifier = Modifier.size(56.dp),

@@ -38,7 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Task
-import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.ApiAdapter
 import com.monkeys.projectmanager.utils.projectStatusOff
 import com.monkeys.projectmanager.utils.tabProjects
 import monkeys_pm.sharedui.generated.resources.Res
@@ -116,7 +116,7 @@ fun showTask(
 
         Button(
             onClick = {
-                LocalApi.closeTask(task.id)
+                ApiAdapter.closeTask(task.id)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -154,7 +154,7 @@ fun showGoTo(
     onClickGoTo: (Int, Uuid?, Boolean) -> Unit,
 ) {
     val offProjectIds = remember {
-        LocalApi.getProjects()
+        ApiAdapter.getProjects()
             .filter { it.status == projectStatusOff }
             .map { it.id }
     }

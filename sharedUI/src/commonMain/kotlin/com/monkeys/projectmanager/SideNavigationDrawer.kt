@@ -103,16 +103,16 @@ fun SideNavigationDrawer(
             Spacer(Modifier.height(24.dp))
 
             val notesNotEmpty by remember {
-                derivedStateOf { LocalApi.getNotes().isNotEmpty() }
+                derivedStateOf { ApiAdapter.getNotes().isNotEmpty() }
             }
             val hasOffProjects by remember {
-                derivedStateOf { LocalApi.getProjects().any { it.status == projectStatusOff } }
+                derivedStateOf { ApiAdapter.getProjects().any { it.status == projectStatusOff } }
             }
             val canEditNote by remember {
                 derivedStateOf {
                     val now = currentTime
                     if (!notesNotEmpty) return@derivedStateOf false
-                    val lastNote = LocalApi.getNotes().maxByOrNull { it.createdDate }
+                    val lastNote = ApiAdapter.getNotes().maxByOrNull { it.createdDate }
                     lastNote?.let {
                         //(now - it.createdDate) <= 10_000L
                         (now - it.createdDate) <= 1_800_000L
@@ -197,7 +197,7 @@ fun SideNavigationDrawer(
             onDismiss = {createNoteAlert = false},
             onConfirm = {title, description ->
                 createNoteAlert = false
-                LocalApi.createNote(title, description)
+                ApiAdapter.createNote(title, description)
             }
         )
 }

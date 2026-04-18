@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.ApiAdapter
 import monkeys_pm.sharedui.generated.resources.Res
 import monkeys_pm.sharedui.generated.resources.create_project
 import monkeys_pm.sharedui.generated.resources.delete
@@ -104,7 +104,7 @@ fun NotesScreen(
     onProjectCreate: (Uuid) -> Unit,
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val notes = LocalApi.getNotes()
+    val notes = ApiAdapter.getNotes()
 
     val expandedNoteIds = remember { mutableStateListOf<Uuid>() }
 
@@ -213,7 +213,7 @@ fun NotesScreen(
 
                                         DeleteHoldButton(
                                             onDeleteConfirmed = {
-                                                LocalApi.closeNote(note.id)
+                                                ApiAdapter.closeNote(note.id)
                                                 expandedNoteIds.remove(note.id)
                                             }
                                         )
@@ -233,7 +233,7 @@ fun NotesScreen(
                 showDialog = false
             },
             onConfirm = {name, desc ->
-                val projId = LocalApi.createProject(name, desc)
+                val projId = ApiAdapter.createProject(name, desc)
                 onProjectCreate(projId)
             },
             stringResource(Res.string.create_project),

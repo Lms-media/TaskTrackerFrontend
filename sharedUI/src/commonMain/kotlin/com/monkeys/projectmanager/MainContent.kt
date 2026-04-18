@@ -6,7 +6,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
-import androidx.compose.ui.layout.BeyondBoundsLayout
 import com.monkeys.projectmanager.utils.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -31,7 +30,7 @@ fun MainContent(
 ) {
     val activeTasks by remember {
         derivedStateOf {
-            LocalApi.getTasks().filter { it.status == statusActive }
+            ApiAdapter.getTasks().filter { it.status == statusActive }
         }
     }
 
@@ -43,11 +42,11 @@ fun MainContent(
         while (true) {
             val currentTime = Clock.System.now().toEpochMilliseconds()
 
-            LocalApi.getTasks()
+            ApiAdapter.getTasks()
                 .filter { it.status == statusBlocked }
                 .forEach { task ->
                     if (task.blockedUntil < currentTime) {
-                        LocalApi.closeTask(task.id)
+                        ApiAdapter.closeTask(task.id)
                     }
                 }
 
@@ -72,8 +71,8 @@ fun MainContent(
                     else showGoTo(onClickGoTo)
                 }
                 editLast -> {
-                    val lastNote = remember(LocalApi.getNotes()) {
-                        LocalApi.getNotes().maxByOrNull { it.createdDate }
+                    val lastNote = remember(ApiAdapter.getNotes()) {
+                        ApiAdapter.getNotes().maxByOrNull { it.createdDate }
                     }
                     if (lastNote != null) {
                         EditNoteScreen(

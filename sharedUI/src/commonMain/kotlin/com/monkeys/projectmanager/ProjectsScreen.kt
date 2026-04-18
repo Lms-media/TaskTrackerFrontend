@@ -18,7 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Project
-import com.monkeys.projectmanager.utils.LocalApi
+import com.monkeys.projectmanager.utils.ApiAdapter
 import com.monkeys.projectmanager.utils.projectStatusOff
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -36,12 +36,12 @@ fun ProjectsScreen(
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val hasOffProjects by remember {
-        derivedStateOf { LocalApi.getProjects().any { it.status == projectStatusOff } }
+        derivedStateOf { ApiAdapter.getProjects().any { it.status == projectStatusOff } }
     }
     val projects by remember {
         derivedStateOf {
             hasOffProjects
-            LocalApi.getProjects().sortedWith(
+            ApiAdapter.getProjects().sortedWith(
                 compareBy<Project> { it.status != projectStatusOff }
                     .thenByDescending { it.createdDate }
             )
@@ -50,7 +50,7 @@ fun ProjectsScreen(
     var selectedProject by remember { mutableStateOf<Project?>(null) }
 
     if (id != null) {
-        selectedProject = LocalApi.getProject(id)
+        selectedProject = ApiAdapter.getProject(id)
     }
 
     if (selectedProject == null){
@@ -144,7 +144,7 @@ fun ProjectsScreen(
                 showDialog = false
             },
             onConfirm = {name, desc ->
-                LocalApi.createProject(name, desc)
+                ApiAdapter.createProject(name, desc)
             },
             stringResource(Res.string.create_project),
         )
