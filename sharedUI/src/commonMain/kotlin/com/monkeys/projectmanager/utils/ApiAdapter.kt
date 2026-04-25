@@ -22,8 +22,8 @@ object ApiAdapter: IApi {
     override fun editProject(project: Project): Boolean {
         return api.editProject(project)
     }
-    override fun blockProject(id: Uuid, blockedUntil: Long): Uuid? {
-        return api.blockProject(id, blockedUntil)
+    override fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid? {
+        return api.blockProject(id, name, description, blockedUntil)
     }
     override fun closeProject(id: Uuid): Boolean {
         return api.closeProject(id)
@@ -32,10 +32,11 @@ object ApiAdapter: IApi {
         projectId: Uuid,
         title: String,
         description: String,
-        status: Int,
+        status: TaskStatus,
+        wave: WaveStatus,
         blockedUntil: Long
     ): Uuid? {
-        return api.createTask(projectId, title, description, status, blockedUntil)
+        return api.createTask(projectId, title, description, status, wave, blockedUntil)
     }
     override fun editTask(task: Task): Boolean {
         return api.editTask(task)

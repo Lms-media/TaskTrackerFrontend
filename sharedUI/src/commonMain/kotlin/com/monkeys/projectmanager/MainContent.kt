@@ -20,17 +20,20 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalUuidApi::class)
 @Composable
 fun MainContent(
-    selectedItem: Int,
-    selectedTab: Int,
+    selectedItem: ActionType,
+    selectedTab: ActionType,
     clearShow: () -> Unit,
     showAllProjects: Boolean,
     clearId: () -> Unit,
     projectId: Uuid? = null,
-    onClickGoTo: (Int, Uuid?, Boolean) -> Unit,
+    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
 ) {
     val activeTasks by remember {
         derivedStateOf {
-            ApiAdapter.getTasks().filter { it.status == statusActive }
+            ApiAdapter.getTasks().filter {
+                (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
+                        && it.wave == WaveStatus.ACTIVE
+            }
         }
     }
 
@@ -43,7 +46,7 @@ fun MainContent(
             val currentTime = Clock.System.now().toEpochMilliseconds()
 
             ApiAdapter.getTasks()
-                .filter { it.status == statusBlocked }
+                .filter { it.status == TaskStatus.BLOCKED }
                 .forEach { task ->
                     if (task.blockedUntil < currentTime) {
                         ApiAdapter.closeTask(task.id)
@@ -66,11 +69,33 @@ fun MainContent(
             label = "ScreenTransition"
         ) { (targetItem, targetTab) ->
             when (targetItem) {
-                getTask -> {
-                    if (activeTasks.isNotEmpty()) showTask(activeTasks.random())
-                    else showGoTo(onClickGoTo)
+                ActionType.GET_TASK -> {
+                    val currentTask = remember(activeTasks) {
+                        activeTasks.find { it.status == TaskStatus.ACTIVE_CURRENT }
+                            ?: activeTasks.randomOrNull()
+                    }
+                    if (currentTask != null && currentTask.status != TaskStatus.ACTIVE_CURRENT) {
+                        currentTask.status = TaskStatus.ACTIVE_CURRENT
+                        ApiAdapter.editTask(currentTask)
+                    }
+                    AnimatedContent(
+                        targetState = currentTask,
+                        transitionSpec = {
+                            (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
+                        },
+                        label = "TaskAnimation"
+                    ) { targetTask ->
+                        if (targetTask != null) {
+                            showTask(task = targetTask)
+                        } else {
+                            showGoTo(onClickGoTo)
+                        }
+                    }
+                    // if (activeTasks.isNotEmpty()) showTask(activeTasks.random())
+                    // else showGoTo(onClickGoTo)
                 }
-                editLast -> {
+
+                ActionType.EDIT_LAST -> {
                     val lastNote = remember(ApiAdapter.getNotes()) {
                         ApiAdapter.getNotes().maxByOrNull { it.createdDate }
                     }
@@ -85,20 +110,26 @@ fun MainContent(
                         )
                     }
                 }
-                think -> {
+
+                ActionType.THINK -> {
                     when (targetTab) {
-                        tabProjects -> ProjectsScreen(
+                        ActionType.PROJECTS -> ProjectsScreen(
                             clearId = clearId,
                             id = projectId,
                             clearShow = clearShow,
                             showAllProjects = showAllProjects,
                             onClickGoTo = onClickGoTo,
                         )
-                        tabNotes -> NotesScreen(
-                            onProjectCreate = {onClickGoTo(tabProjects, it, false)},
+
+                        ActionType.NOTES -> NotesScreen(
+                            onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
                         )
+
+                        else -> {}
                     }
                 }
+
+                else -> {}
             }
         }
     }

@@ -33,10 +33,10 @@ import kotlin.uuid.ExperimentalUuidApi
 @Composable
 fun SideNavigationDrawer(
     isExpanded: Boolean,
-    selectedItem: Int,
-    selectedTab: Int,
-    onItemClick: (Int) -> Unit,
-    onTabClick: (Int) -> Unit,
+    selectedItem: ActionType,
+    selectedTab: ActionType,
+    onItemClick: (ActionType) -> Unit,
+    onTabClick: (ActionType) -> Unit,
     onToggle: () -> Unit
 ) {
     var currentTime by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
@@ -106,7 +106,9 @@ fun SideNavigationDrawer(
                 derivedStateOf { ApiAdapter.getNotes().isNotEmpty() }
             }
             val hasOffProjects by remember {
-                derivedStateOf { ApiAdapter.getProjects().any { it.status == projectStatusOff } }
+                derivedStateOf { ApiAdapter.getProjects().any {
+                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                } }
             }
             val canEditNote by remember {
                 derivedStateOf {
@@ -120,13 +122,11 @@ fun SideNavigationDrawer(
                 }
             }
             val items = buildList {
-                add(NavigationItem(getTask, stringResource(Res.string.get_task), Icons.AutoMirrored.Filled.List))
-                add(NavigationItem(createNote, stringResource(Res.string.create_note), Icons.Default.BookmarkBorder))
+                add(NavigationItem(ActionType.GET_TASK, stringResource(Res.string.get_task), Icons.AutoMirrored.Filled.List))
+                add(NavigationItem(ActionType.CREATE_NOTE, stringResource(Res.string.create_note), Icons.Default.BookmarkBorder))
                 if (canEditNote)
-                    add(NavigationItem(editLast, stringResource(Res.string.edit), Icons.Default.Edit))
-                add(NavigationItem(think, stringResource(Res.string.think), Icons.Default.Lightbulb,
-                    hasNotification = notesNotEmpty || hasOffProjects
-                ))
+                    add(NavigationItem(ActionType.EDIT_LAST, stringResource(Res.string.edit), Icons.Default.Edit))
+                add(NavigationItem(ActionType.THINK, stringResource(Res.string.think), Icons.Default.Lightbulb))
             }
 
             items.forEach { item ->
@@ -135,33 +135,50 @@ fun SideNavigationDrawer(
                     animationSpec = tween(durationMillis = 200)
                 )
 
-                NavigationRow(
-                    item,
-                    isExpanded,
-                    isSelected = item.id == selectedItem,
-                    modifier = Modifier
-                        .padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(bottomEnd = 100.dp, topEnd = 100.dp))
-                        .background(animatedBgColor)
-                        .clickable {
-                            if (item.id == createNote) createNoteAlert = true
-                            else onItemClick(item.id)
-                        }
-                        .padding(horizontal = 8.dp)
-                )
+                if (item.id == ActionType.EDIT_LAST)
+                    NavigationRow(
+                        item,
+                        isExpanded,
+                        isSelected = item.id == selectedItem,
+                        modifier = Modifier
+                            .padding(top = 4.dp, bottom = 4.dp, start = 8.dp, end = 8.dp)
+                            .fillMaxWidth()
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(animatedBgColor)
+                            .clickable {
+                                onItemClick(item.id)
+                            }
+                            .padding(horizontal = 10.dp)
+                    )
+                else
+                    NavigationRow(
+                        item,
+                        isExpanded,
+                        isSelected = item.id == selectedItem,
+                        modifier = Modifier
+                            .padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .clip(RoundedCornerShape(bottomEnd = 100.dp, topEnd = 100.dp))
+                            .background(animatedBgColor)
+                            .clickable {
+                                if (item.id == ActionType.CREATE_NOTE) createNoteAlert = true
+                                else onItemClick(item.id)
+                            }
+                            .padding(horizontal = 8.dp)
+                    )
             }
 
-            if (selectedItem == think){
+            if (selectedItem == ActionType.THINK){
                 val tabs = buildList {
                     add(NavigationItem(
-                        tabProjects,
+                        ActionType.PROJECTS,
                         stringResource(Res.string.control),
                         Icons.Outlined.Keyboard,
                         hasNotification = hasOffProjects
                     ))
-                    add(NavigationItem(tabNotes,
+                    add(NavigationItem(ActionType.NOTES,
                         stringResource(Res.string.notes),
                         Icons.Outlined.Inbox,
                         hasNotification = notesNotEmpty))

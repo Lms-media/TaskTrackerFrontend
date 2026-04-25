@@ -9,7 +9,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
-object LocalApi: IApi {
+object LocalApi : IApi {
     private val projects = mutableStateListOf<Project>()
     private val tasks = mutableStateListOf<Task>()
     private val notes = mutableStateListOf<Note>()
@@ -25,29 +25,38 @@ object LocalApi: IApi {
                 projectId,
                 name,
                 description,
-                projectStatusOff,
+                ProjectStatus.OFF,
                 mutableStateListOf(),
                 Clock.System.now().toEpochMilliseconds()
             )
         )
         return projectId
     }
+
     override fun getProject(id: Uuid): Project? {
         return projects.find { it.id == id }?.let { return it }
     }
+
     override fun editProject(project: Project): Boolean {
         val index = projects.indexOfFirst { it.id == project.id }
         return if (index != -1) {
-            projects[index] = project
+            projects.removeAt(index)
+            projects.add(index, project)
             true
         } else false
     }
-    override fun blockProject(id: Uuid, blockedUntil: Long): Uuid? {
-        return createTask(id, "block", "block", statusBlocked, blockedUntil)
+
+    override fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid? {
+        return createTask(id, name, description, TaskStatus.BLOCKED, WaveStatus.ACTIVE, blockedUntil)
     }
+
     override fun closeProject(id: Uuid): Boolean {
         val index = projects.indexOfFirst { it.id == id }
         return if (index != -1) {
+            projects[index].tasks.forEach { task ->
+                task.status = TaskStatus.CLOSED
+                editTask(task)
+            }
             projects.removeAt(index)
             true
         } else false
@@ -57,12 +66,13 @@ object LocalApi: IApi {
         projectId: Uuid,
         title: String,
         description: String,
-        status: Int,
+        status: TaskStatus,
+        wave: WaveStatus,
         blockedUntil: Long
     ): Uuid? {
         val index = projects.indexOfFirst { it.id == projectId }
         val project = projects[index]
-        if (project.status == projectStatusOff){
+        if (project.status == ProjectStatus.OFF) {
             val taskId = Uuid.random()
             val task = Task(
                 taskId,
@@ -70,13 +80,14 @@ object LocalApi: IApi {
                 title,
                 description,
                 status,
+                wave,
                 Clock.System.now().toEpochMilliseconds(),
                 blockedUntil
             )
             tasks.add(task)
 
             project.tasks.add(task)
-            project.status = projectStatusOn
+            project.status = ProjectStatus.ON
             projects.removeAt(index)
             projects.add(index, project)
 
@@ -84,24 +95,29 @@ object LocalApi: IApi {
         }
         return null
     }
+
     override fun editTask(task: Task): Boolean {
         val index = tasks.indexOfFirst { it.id == task.id }
         return if (index != -1) {
-            tasks[index] = task
+            tasks.removeAt(index)
+            tasks.add(index, task)
             true
         } else false
     }
+
     override fun closeTask(id: Uuid): Boolean {
         val index = tasks.indexOfFirst { it.id == id }
 
         return if (index != -1) {
             val task = tasks[index]
+            val projectNewStatus =
+                if (task.status == TaskStatus.BLOCKED) ProjectStatus.OFF_FROM_BLOCK else ProjectStatus.OFF
 
             val projIndex = projects.indexOfFirst { it.id == task.projectId }
             val project = projects[projIndex]
 
-            task.status = statusClosed
-            project.status = projectStatusOff
+            task.status = TaskStatus.CLOSED
+            project.status = projectNewStatus
 
             val taskProjIndex = project.tasks.indexOfFirst { it.id == id }
             project.tasks.removeAt(taskProjIndex)
@@ -128,13 +144,16 @@ object LocalApi: IApi {
         )
         return noteId
     }
+
     override fun editNote(note: Note): Boolean {
         val index = notes.indexOfFirst { it.id == note.id }
         return if (index != -1) {
-            notes[index] = note
+            notes.removeAt(index)
+            notes.add(index, note)
             true
         } else false
     }
+
     override fun closeNote(id: Uuid): Boolean {
         val index = notes.indexOfFirst { it.id == id }
         return if (index != -1) {

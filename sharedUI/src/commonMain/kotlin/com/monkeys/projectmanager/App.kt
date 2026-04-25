@@ -6,9 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.monkeys.projectmanager.theme.AppTheme
-import com.monkeys.projectmanager.utils.getTask
-import com.monkeys.projectmanager.utils.tabProjects
-import com.monkeys.projectmanager.utils.think
+import com.monkeys.projectmanager.utils.ActionType
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -20,8 +18,8 @@ fun App(
 ) = AppTheme(onThemeChanged) {
 
     var isExpanded by remember { mutableStateOf(false) }
-    var selectedItem by remember { mutableStateOf(getTask) }
-    var selectedTab by remember { mutableStateOf(-1) }
+    var selectedItem by remember { mutableStateOf(ActionType.GET_TASK) }
+    var selectedTab by remember { mutableStateOf(ActionType.ENUM_END) }
     var selectedProjId by remember { mutableStateOf<Uuid?>(null) }
     var showAllProjects by remember { mutableStateOf(false) }
 
@@ -31,7 +29,7 @@ fun App(
             selectedItem = selectedItem,
             selectedTab = selectedTab,
             onItemClick = {
-                selectedTab = tabProjects
+                selectedTab = ActionType.PROJECTS
                 selectedItem = it },
             onTabClick = { selectedTab = it },
             onToggle = { isExpanded = !isExpanded }
@@ -45,7 +43,7 @@ fun App(
                 selectedProjId = null
             },
             onClickGoTo = { tab, id, showAll ->
-                selectedItem = think
+                selectedItem = ActionType.THINK
                 selectedTab = tab
                 selectedProjId = id
                 showAllProjects = showAll

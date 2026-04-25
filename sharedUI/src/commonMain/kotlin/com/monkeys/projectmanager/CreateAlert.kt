@@ -1,6 +1,5 @@
 package com.monkeys.projectmanager
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,22 +34,22 @@ fun CreateAlert(
     onConfirm: (name: String, desc: String) -> Unit,
     title: String,
 ) {
-    var projectName by remember { mutableStateOf("") }
-    var projectDescription by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = { onClick() },
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = projectName,
-                    onValueChange = { projectName = it },
+                    value = name,
+                    onValueChange = { name = it },
                     label = { Text(stringResource(Res.string.name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = projectDescription,
-                    onValueChange = { projectDescription = it },
+                    value = description,
+                    onValueChange = { description = it },
                     label = { Text(stringResource(Res.string.description)) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -59,10 +58,10 @@ fun CreateAlert(
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (projectName.isNotBlank()) {
-                        onConfirm(projectName, projectDescription)
-                        projectName = ""
-                        projectDescription = ""
+                    if (name.isNotBlank()) {
+                        onConfirm(name, description)
+                        name = ""
+                        description = ""
                         onClick()
                     }
                 },
@@ -93,8 +92,13 @@ fun CreateAlert(
 @Composable
 fun BlockAlert(
     onDismiss: () -> Unit,
-    onConfirm: (Long) -> Unit
+    onConfirm: (String, String, Long) -> Unit
 ) {
+    var blockName by remember { mutableStateOf("") }
+    var blockDescription by remember { mutableStateOf("") }
+
+    var currentStep by remember { mutableStateOf(0) }
+
     val now = remember { Clock.System.now().toEpochMilliseconds() }
     val todayStartUtc = remember {
         now - (now % 86400000L)
@@ -115,7 +119,6 @@ fun BlockAlert(
         is24Hour = true
     )
 
-    var isTimePickerVisible by remember { mutableStateOf(false) }
 
     val finalTimestamp by remember(datePickerState.selectedDateMillis, timePickerState.hour, timePickerState.minute) {
         derivedStateOf {
@@ -129,56 +132,116 @@ fun BlockAlert(
 
     AlertDialog(
         onDismissRequest = { onDismiss() },
-        title = { Text(if (!isTimePickerVisible) stringResource(Res.string.select_date) else stringResource(Res.string.select_time)) },
+        title = {
+            Text(
+                when (currentStep) {
+                    0 -> stringResource(Res.string.block)
+                    1 -> stringResource(Res.string.select_date)
+                    else -> stringResource(Res.string.select_time)
+                }
+            )
+        },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (!isTimePickerVisible) {
-                    DatePicker(
-                        state = datePickerState,
-                        showModeToggle = false,
-                        title = null,
-                        headline = null
-                    )
-                } else {
-                    Spacer(Modifier.height(24.dp))
-                    TimeInput(state = timePickerState)
-
-                    if (!isTimeValid) {
-                        Text(
-                            text = stringResource(Res.string.time_passed),
-                            color = Color.Red,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 16.dp)
+                when (currentStep) {
+                    0 -> {
+                        OutlinedTextField(
+                            value = blockName,
+                            onValueChange = { blockName = it },
+                            label = { Text(stringResource(Res.string.name)) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = blockDescription,
+                            onValueChange = { blockDescription = it },
+                            label = { Text(stringResource(Res.string.description)) },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
+                    1 -> {
+                        DatePicker(
+                            state = datePickerState,
+                            showModeToggle = false,
+                            title = null,
+                            headline = null
+                        )
+                    }
+                    2 -> {
+                        Spacer(Modifier.height(24.dp))
+                        TimeInput(state = timePickerState)
+                        if (!isTimeValid) {
+                            Text(
+                                text = stringResource(Res.string.time_passed),
+                                color = Color.Red,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 16.dp)
+                            )
+                        }
+                    }
                 }
+//                if (!isTimePickerVisible) {
+//                    DatePicker(
+//                        state = datePickerState,
+//                        showModeToggle = false,
+//                        title = null,
+//                        headline = null
+//                    )
+//                } else {
+//                    Spacer(Modifier.height(24.dp))
+//                    TimeInput(state = timePickerState)
+//
+//                    if (!isTimeValid) {
+//                        Text(
+//                            text = stringResource(Res.string.time_passed),
+//                            color = Color.Red,
+//                            style = MaterialTheme.typography.bodySmall,
+//                            modifier = Modifier.padding(top = 16.dp)
+//                        )
+//                    }
+//                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (!isTimePickerVisible) {
-                        isTimePickerVisible = true
-                    } else {
-                        onConfirm(finalTimestamp)
-                        onDismiss()
+                    when (currentStep) {
+                        0 -> currentStep = 1
+                        1 -> currentStep = 2
+                        2 -> {
+                            onConfirm(blockName, blockDescription, finalTimestamp)
+                            onDismiss()
+                        }
                     }
+//                    if (!isTimePickerVisible) {
+//                        isTimePickerVisible = true
+//                    } else {
+//                        onConfirm(finalTimestamp)
+//                        onDismiss()
+//                    }
                 },
-                enabled = if (!isTimePickerVisible) datePickerState.selectedDateMillis != null else isTimeValid,
+                enabled = when (currentStep) {
+                    0 -> blockName.isNotBlank()
+                    1 -> datePickerState.selectedDateMillis != null
+                    else -> isTimeValid
+                },
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = Color.White,
                     containerColor = Color(0xFF3B2D60)
                 )
             ) {
-                Text(if (!isTimePickerVisible) stringResource(Res.string.continue_button) else stringResource(Res.string.ok))
+                Text(
+                    if (currentStep < 2) stringResource(Res.string.continue_button)
+                    else stringResource(Res.string.ok)
+                )
             }
         },
         dismissButton = {
             TextButton(
-                onClick = { if (isTimePickerVisible) isTimePickerVisible = false else onDismiss() },
+                onClick = { if (currentStep > 0) currentStep-- else onDismiss() },
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = Color.Black,
                     containerColor = Color(0xFFE9E9E9),
@@ -350,6 +413,64 @@ fun CreateNoteAlert(
                         }
                     }
                 }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalUuidApi::class)
+@Composable
+fun TaskConfirmationAlert(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    onCreateProject: () -> Unit,
+    onCreateNote: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        containerColor = Color.White,
+        title = {
+            Text(
+                stringResource(Res.string.close_task),
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.Black
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onCreateProject,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(stringResource(Res.string.create_project), fontSize = 12.sp)
+                    }
+                    OutlinedButton(
+                        onClick = onCreateNote,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(stringResource(Res.string.create_note), fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B2D60))
+            ) {
+                Text(stringResource(Res.string.close))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel), color = Color(0xFF3B2D60))
             }
         }
     )

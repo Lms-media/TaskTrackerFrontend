@@ -1,35 +1,15 @@
 package com.monkeys.projectmanager
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,14 +18,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Task
+import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
-import com.monkeys.projectmanager.utils.projectStatusOff
-import com.monkeys.projectmanager.utils.tabProjects
-import monkeys_pm.sharedui.generated.resources.Res
-import monkeys_pm.sharedui.generated.resources.close
-import monkeys_pm.sharedui.generated.resources.go_to_create_tasks
-import monkeys_pm.sharedui.generated.resources.no_tasks
-import monkeys_pm.sharedui.generated.resources.task_description
+import com.monkeys.projectmanager.utils.ProjectStatus
+import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -56,6 +32,41 @@ fun showTask(
     task: Task
 ) {
     val scrollState = rememberScrollState()
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var createNoteAlert by remember { mutableStateOf(false) }
+    var createProjectAlert by remember { mutableStateOf(false) }
+
+    if (showConfirmDialog) {
+        TaskConfirmationAlert(
+            onDismiss = { showConfirmDialog = false },
+            onConfirm = {
+                showConfirmDialog = false
+                ApiAdapter.closeTask(task.id)
+            },
+            onCreateProject = { createProjectAlert = true },
+            onCreateNote = { createNoteAlert = true },
+        )
+    }
+    if (createNoteAlert) {
+        CreateNoteAlert(
+            onDismiss = { createNoteAlert = false },
+            onConfirm = { title, description ->
+                createNoteAlert = false
+                ApiAdapter.createNote(title, description)
+            }
+        )
+    }
+    if (createProjectAlert) {
+        CreateAlert(
+            onClick = {
+                createProjectAlert = false
+            },
+            onConfirm = {name, desc ->
+                ApiAdapter.createProject(name, desc)
+            },
+            stringResource(Res.string.create_project),
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -116,7 +127,8 @@ fun showTask(
 
         Button(
             onClick = {
-                ApiAdapter.closeTask(task.id)
+                showConfirmDialog = true
+                // ApiAdapter.closeTask(task.id)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -151,11 +163,11 @@ fun showTask(
 @OptIn(ExperimentalUuidApi::class)
 @Composable
 fun showGoTo(
-    onClickGoTo: (Int, Uuid?, Boolean) -> Unit,
+    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
 ) {
     val offProjectIds = remember {
         ApiAdapter.getProjects()
-            .filter { it.status == projectStatusOff }
+            .filter { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
             .map { it.id }
     }
 
@@ -187,9 +199,9 @@ fun showGoTo(
                 .fillMaxWidth(),
             onClick = {
                 if (offProjectIds.isNotEmpty()) {
-                    onClickGoTo(tabProjects, offProjectIds.first(), true)
+                    onClickGoTo(ActionType.PROJECTS, offProjectIds.first(), true)
                 } else {
-                    onClickGoTo(tabProjects, null, false)
+                    onClickGoTo(ActionType.PROJECTS, null, false)
                 }
             },
             colors = ButtonDefaults.elevatedButtonColors(

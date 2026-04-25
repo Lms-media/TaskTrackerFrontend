@@ -1,5 +1,6 @@
 package com.monkeys.projectmanager
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.*
@@ -18,9 +20,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Project
+import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
-import com.monkeys.projectmanager.utils.projectStatusOff
-import monkeys_pm.sharedui.generated.resources.*
+import com.monkeys.projectmanager.utils.ProjectStatus
+import monkeys_pm.sharedui.generated.resources.Res
+import monkeys_pm.sharedui.generated.resources.create_project
+import monkeys_pm.sharedui.generated.resources.no_all_projects_full
+import monkeys_pm.sharedui.generated.resources.no_projects
 import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -32,118 +38,137 @@ fun ProjectsScreen(
     clearShow: () -> Unit,
     showAllProjects: Boolean,
     id: Uuid? = null,
-    onClickGoTo: (Int, Uuid?, Boolean) -> Unit
+    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val hasOffProjects by remember {
-        derivedStateOf { ApiAdapter.getProjects().any { it.status == projectStatusOff } }
+        derivedStateOf {
+            ApiAdapter.getProjects().any { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+        }
     }
     val projects by remember {
         derivedStateOf {
             hasOffProjects
             ApiAdapter.getProjects().sortedWith(
-                compareBy<Project> { it.status != projectStatusOff }
-                    .thenByDescending { it.createdDate }
+                compareBy<Project> {
+                    it.status != ProjectStatus.OFF && it.status != ProjectStatus.OFF_FROM_BLOCK
+                }.thenByDescending { it.createdDate }
             )
         }
     }
     var selectedProject by remember { mutableStateOf<Project?>(null) }
 
-    if (id != null) {
-        selectedProject = ApiAdapter.getProject(id)
+    LaunchedEffect(id) {
+        if (id != null) {
+            selectedProject = ApiAdapter.getProject(id)
+        }
     }
 
-    if (selectedProject == null){
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFF5F5F5))
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                if (projects.isNotEmpty()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        if (hasOffProjects) {
-                            Text(
-                                text = stringResource(Res.string.no_all_projects_full),
-                                color = Color.Red,
-                                fontSize = 30.sp,
+    AnimatedContent(
+        targetState = selectedProject,
+        transitionSpec = {
+            if (targetState != null) {
+                (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
+                    slideOutHorizontally { width -> -width } + fadeOut())
+            } else {
+                (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
+                    slideOutHorizontally { width -> width } + fadeOut())
+            }
+        },
+        label = "ProjectTransition"
+    ) { currentProject ->
+        if (currentProject == null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFF5F5F5))
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (projects.isNotEmpty()) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            if (hasOffProjects) {
+                                Text(
+                                    text = stringResource(Res.string.no_all_projects_full),
+                                    color = Color.Red,
+                                    fontSize = 30.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 36.sp
+                                )
+                            }
+
+                            LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(16.dp),
-                                textAlign = TextAlign.Center,
-                                lineHeight = 36.sp
+                                    .weight(1f),
+                                contentPadding = PaddingValues(bottom = 100.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(
+                                    projects,
+                                    key = { "${it.id}_${it.status}" }
+                                ) { project ->
+                                    println("project title: ${project.name}")
+                                    println("project status: ${project.status}")
+
+                                    ProjectItemRow(
+                                        project,
+                                        hasOffProjects = hasOffProjects,
+                                        onClick = { selectedProject = project }
+                                    )
+                                }
+                            }
+                        }
+                    } else
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(Res.string.no_projects),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = Color(0xFFA9A9A9),
+                                maxLines = 1
                             )
                         }
 
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentPadding = PaddingValues(bottom = 100.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(
-                                projects,
-                                key = { it.id }
-                            ) { project ->
-
-                                ProjectItemRow(
-                                    project,
-                                    hasOffProjects = hasOffProjects,
-                                    onClick = { selectedProject = project }
-                                )
-                            }
-                        }
-                    }
-                }
-                else
-                    Box(
+                    ExtendedFloatingActionButton(
+                        onClick = { showDialog = true },
                         modifier = Modifier
-                            .fillMaxSize(),
-                        contentAlignment = Alignment.Center
+                            .align(Alignment.BottomEnd)
+                            .padding(24.dp),
+                        containerColor = Color(0xFF3B2D60),
+                        contentColor = Color.White,
+                        shape = CircleShape
                     ) {
-                        Text(
-                            text = stringResource(Res.string.no_projects),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color(0xFFA9A9A9),
-                            maxLines = 1
-                        )
+                        Icon(Icons.Outlined.Folder, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(Res.string.create_project))
                     }
-
-                ExtendedFloatingActionButton(
-                    onClick = { showDialog = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(24.dp),
-                    containerColor = Color(0xFF3B2D60),
-                    contentColor = Color.White,
-                    shape = CircleShape
-                ) {
-                    Icon(Icons.Outlined.Folder, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(Res.string.create_project))
                 }
             }
-        }
+        } else ProjectDetailsScreen(
+            currentProject,
+            onBack = {
+                selectedProject = null
+                clearId()
+                clearShow()
+            },
+            clearShow = clearShow,
+            showAllProjects = showAllProjects,
+            onClickGoTo = onClickGoTo
+        )
     }
-    else ProjectDetailsScreen(
-        selectedProject!!,
-        onBack = {
-            selectedProject = null
-            clearId()
-            clearShow()
-        },
-        clearShow = clearShow,
-        showAllProjects = showAllProjects,
-        onClickGoTo = onClickGoTo
-    )
 
     if (showDialog) {
         CreateAlert(
             onClick = {
                 showDialog = false
             },
-            onConfirm = {name, desc ->
+            onConfirm = { name, desc ->
                 ApiAdapter.createProject(name, desc)
             },
             stringResource(Res.string.create_project),
@@ -157,13 +182,19 @@ fun ProjectItemRow(
     hasOffProjects: Boolean,
     onClick: () -> Unit
 ) {
+    println("project title in item: ${project.name}")
+    println("project status in item: ${project.status}")
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onClick() }
                 .background(
-                    if (project.status == projectStatusOff && hasOffProjects) Color(0xFFFFEBEE)
+                    if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK)
+                        && hasOffProjects
+                    ) Color(
+                        0xFFFFEBEE
+                    )
                     else Color(0xFFE8F5E9)
                 )
                 .padding(vertical = 24.dp, horizontal = 20.dp),
@@ -179,7 +210,16 @@ fun ProjectItemRow(
                 color = Color.Black
             )
 
-            if (project.status == projectStatusOff && hasOffProjects) {
+            if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK) && hasOffProjects) {
+                if (project.status == ProjectStatus.OFF_FROM_BLOCK && hasOffProjects) {
+                    Icon(
+                        imageVector = Icons.Default.HourglassEmpty,
+                        contentDescription = null,
+                        tint = Color(0xFF3B2D60),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,

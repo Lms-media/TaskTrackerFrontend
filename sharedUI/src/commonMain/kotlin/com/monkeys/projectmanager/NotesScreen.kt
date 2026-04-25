@@ -23,9 +23,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.utils.ApiAdapter
@@ -40,7 +42,11 @@ import kotlin.uuid.Uuid
 @Composable
 fun DeleteHoldButton(
     onDeleteConfirmed: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    deleteIcon: ImageVector = Icons.Default.Delete,
+    buttonRadius: Dp = 56.dp,
+    circleRadius: Dp = 52.dp,
+    iconSize: Dp = 24.dp,
 ) {
     var isHolding by remember { mutableStateOf(false) }
 
@@ -62,7 +68,7 @@ fun DeleteHoldButton(
 
     Box(
         modifier = modifier
-            .size(56.dp)
+            .size(buttonRadius)
             .clip(CircleShape)
             .background(Color(0xFF3B2D60))
             .pointerInput(Unit) {
@@ -82,7 +88,7 @@ fun DeleteHoldButton(
         if (progressAnimation > 0f) {
             CircularProgressIndicator(
                 progress = { progressAnimation },
-                modifier = Modifier.size(52.dp),
+                modifier = Modifier.size(circleRadius),
                 color = Color(0xFFFFFFFF),
                 strokeWidth = 4.dp,
                 trackColor = Color.Transparent,
@@ -90,10 +96,10 @@ fun DeleteHoldButton(
         }
 
         Icon(
-            imageVector = Icons.Default.Delete,
+            imageVector = deleteIcon,
             contentDescription = stringResource(Res.string.delete),
             tint = Color.White,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(iconSize)
         )
     }
 }
