@@ -8,21 +8,21 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 interface IApi {
-    fun getProjects(): List<Project>
-    fun getTasks(): List<Task>
-    fun getNotes(): List<Note>
+    suspend fun getProjects(): List<Project>
+    suspend fun getTasks(): List<Task>
+    suspend fun getNotes(): List<Note>
 
-    fun createProject(name: String, description: String): Uuid
-    fun getProject(id: Uuid): Project?
-    fun editProject(project: Project): Boolean
-    fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid?
-    fun closeProject(id: Uuid): Boolean
+    suspend fun createProject(name: String, description: String): Uuid
+    suspend fun getProject(id: Uuid): Project?
+    suspend fun editProject(project: Project): Boolean
+    suspend fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid?
+    suspend fun closeProject(id: Uuid): Boolean
 
-    fun createTask(projectId: Uuid, title: String, description: String, status: TaskStatus, wave: WaveStatus, blockedUntil: Long): Uuid?
-    fun editTask(task: Task): Boolean
-    fun closeTask(id: Uuid): Boolean
+    suspend fun createTask(projectId: Uuid, title: String, description: String, status: TaskStatus, wave: WaveStatus, blockedUntil: Long): Uuid?
+    suspend fun editTask(task: Task): Boolean
+    suspend fun closeTask(id: Uuid): Boolean
 
-    fun createNote(title: String, text: String): Uuid
-    fun editNote(note: Note): Boolean
-    fun closeNote(id: Uuid): Boolean
+    suspend fun createNote(title: String, text: String): Uuid
+    suspend fun editNote(note: Note): Boolean
+    suspend fun closeNote(id: Uuid): Boolean
 }
