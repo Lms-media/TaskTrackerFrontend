@@ -38,33 +38,37 @@ fun ProjectsScreen(
     clearId: () -> Unit,
     clearShow: () -> Unit,
     showAllProjects: Boolean,
+    refreshKey: Int,
     id: Uuid? = null,
-    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit
+    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    onDataChanged: () -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
+    var selectedProject by remember { mutableStateOf<Project?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         projects = ApiAdapter.getProjects()
+        selectedProject?.let { project ->
+            selectedProject = ApiAdapter.getProject(project.id)
+        }
     }
 
     val hasOffProjects by remember(projects) {
         derivedStateOf {
-            projects.any { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+            projects.any { it.status == ProjectStatus.OFF }
         }
     }
     val sortedProjects by remember(projects) {
         derivedStateOf {
             projects.sortedWith(
                 compareBy<Project> {
-                    it.status != ProjectStatus.OFF && it.status != ProjectStatus.OFF_FROM_BLOCK
+                    it.status != ProjectStatus.OFF
                 }.thenByDescending { it.createdDate }
             )
         }
     }
-    var selectedProject by remember { mutableStateOf<Project?>(null) }
-
     LaunchedEffect(id) {
         if (id != null) {
             selectedProject = ApiAdapter.getProject(id)
@@ -165,6 +169,7 @@ fun ProjectsScreen(
                 clearShow()
                 scope.launch {
                     projects = ApiAdapter.getProjects()
+                    onDataChanged()
                 }
             },
             clearShow = clearShow,
@@ -173,6 +178,7 @@ fun ProjectsScreen(
             onProjectChanged = {
                 projects = ApiAdapter.getProjects()
                 selectedProject = ApiAdapter.getProject(currentProject.id)
+                onDataChanged()
             }
         )
     }
@@ -186,6 +192,7 @@ fun ProjectsScreen(
                 scope.launch {
                     ApiAdapter.createProject(name, desc)
                     projects = ApiAdapter.getProjects()
+                    onDataChanged()
                     showDialog = false
                 }
             },
@@ -208,12 +215,11 @@ fun ProjectItemRow(
                 .fillMaxWidth()
                 .clickable { onClick() }
                 .background(
-                    if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK)
-                        && hasOffProjects
-                    ) Color(
-                        0xFFFFEBEE
-                    )
-                    else Color(0xFFE8F5E9)
+                    when {
+                        project.status == ProjectStatus.OFF && hasOffProjects -> Color(0xFFFFEBEE)
+                        project.status == ProjectStatus.OFF_FROM_BLOCK -> Color(0xFFFFF8E1)
+                        else -> Color(0xFFE8F5E9)
+                    }
                 )
                 .padding(vertical = 24.dp, horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -228,16 +234,14 @@ fun ProjectItemRow(
                 color = Color.Black
             )
 
-            if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK) && hasOffProjects) {
-                if (project.status == ProjectStatus.OFF_FROM_BLOCK && hasOffProjects) {
-                    Icon(
-                        imageVector = Icons.Default.HourglassEmpty,
-                        contentDescription = null,
-                        tint = Color(0xFF3B2D60),
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                }
+            if (project.status == ProjectStatus.OFF_FROM_BLOCK) {
+                Icon(
+                    imageVector = Icons.Default.HourglassEmpty,
+                    contentDescription = null,
+                    tint = Color(0xFF3B2D60),
+                    modifier = Modifier.size(32.dp)
+                )
+            } else if (project.status == ProjectStatus.OFF && hasOffProjects) {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,

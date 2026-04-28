@@ -110,12 +110,14 @@ fun DeleteHoldButton(
 @Composable
 fun NotesScreen(
     onProjectCreate: (Uuid) -> Unit,
+    refreshKey: Int,
+    onDataChanged: () -> Unit,
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         notes = ApiAdapter.getNotes()
     }
 
@@ -213,13 +215,25 @@ fun NotesScreen(
                                         Button(
                                             modifier = Modifier.height(56.dp).clip(CircleShape),
                                             onClick = { showDialog = true },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B2D60)),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = Color(0xFF3B2D60),
+                                                contentColor = Color.White
+                                            ),
                                             shape = RoundedCornerShape(16.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                                         ) {
-                                            Icon(Icons.Default.CreateNewFolder, contentDescription = null, modifier = Modifier.size(20.dp))
+                                            Icon(
+                                                Icons.Default.CreateNewFolder,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                             Spacer(Modifier.width(8.dp))
-                                            Text(stringResource(Res.string.create_project), fontSize = 14.sp)
+                                            Text(
+                                                stringResource(Res.string.create_project),
+                                                color = Color.White,
+                                                fontSize = 14.sp
+                                            )
                                         }
 
                                         Spacer(Modifier.width(16.dp))
@@ -230,6 +244,7 @@ fun NotesScreen(
                                                     ApiAdapter.closeNote(note.id)
                                                     notes = ApiAdapter.getNotes()
                                                     expandedNoteIds.remove(note.id)
+                                                    onDataChanged()
                                                 }
                                             }
                                         )
@@ -252,6 +267,7 @@ fun NotesScreen(
                 scope.launch {
                     val projId = ApiAdapter.createProject(name, desc)
                     showDialog = false
+                    onDataChanged()
                     onProjectCreate(projId)
                 }
             },

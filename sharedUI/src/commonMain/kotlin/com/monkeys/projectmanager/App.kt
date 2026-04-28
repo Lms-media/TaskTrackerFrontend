@@ -21,26 +21,35 @@ fun App(
     var selectedItem by remember { mutableStateOf(ActionType.GET_TASK) }
     var selectedTab by remember { mutableStateOf(ActionType.ENUM_END) }
     var selectedProjId by remember { mutableStateOf<Uuid?>(null) }
+    var selectedNoteId by remember { mutableStateOf<Uuid?>(null) }
     var showAllProjects by remember { mutableStateOf(false) }
+    var refreshKey by remember { mutableStateOf(0) }
+    val requestRefresh = { refreshKey += 1 }
 
     Row(Modifier.fillMaxSize()) {
         SideNavigationDrawer(
             isExpanded = isExpanded,
             selectedItem = selectedItem,
             selectedTab = selectedTab,
-            onItemClick = {
+            refreshKey = refreshKey,
+            onItemClick = { item, noteId ->
                 selectedTab = ActionType.PROJECTS
-                selectedItem = it },
+                selectedNoteId = noteId
+                selectedItem = item },
             onTabClick = { selectedTab = it },
-            onToggle = { isExpanded = !isExpanded }
+            onToggle = { isExpanded = !isExpanded },
+            onDataChanged = requestRefresh
         )
 
         MainContent(
             selectedItem,
             selectedTab,
+            refreshKey = refreshKey,
             projectId = selectedProjId,
+            noteId = selectedNoteId,
             clearId = {
                 selectedProjId = null
+                selectedNoteId = null
             },
             onClickGoTo = { tab, id, showAll ->
                 selectedItem = ActionType.THINK
@@ -51,7 +60,8 @@ fun App(
             clearShow = {
                 showAllProjects = false
             },
-            showAllProjects = showAllProjects
+            showAllProjects = showAllProjects,
+            onDataChanged = requestRefresh
         )
     }
 }

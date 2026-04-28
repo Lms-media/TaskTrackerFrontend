@@ -30,6 +30,7 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 
 @OptIn(ExperimentalUuidApi::class)
@@ -38,16 +39,18 @@ fun SideNavigationDrawer(
     isExpanded: Boolean,
     selectedItem: ActionType,
     selectedTab: ActionType,
-    onItemClick: (ActionType) -> Unit,
+    refreshKey: Int,
+    onItemClick: (ActionType, Uuid?) -> Unit,
     onTabClick: (ActionType) -> Unit,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onDataChanged: () -> Unit
 ) {
     var currentTime by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
     var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         while (true) {
             currentTime = Clock.System.now().toEpochMilliseconds()
             notes = ApiAdapter.getNotes()
@@ -115,7 +118,7 @@ fun SideNavigationDrawer(
             }
             val hasOffProjects by remember {
                 derivedStateOf { projects.any {
-                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                    it.status == ProjectStatus.OFF
                 } }
             }
             val canEditNote by remember {
@@ -155,7 +158,8 @@ fun SideNavigationDrawer(
                             .clip(CircleShape)
                             .background(animatedBgColor)
                             .clickable {
-                                onItemClick(item.id)
+                                val lastNote = notes.maxByOrNull { it.createdDate }
+                                onItemClick(item.id, lastNote?.id)
                             }
                             .padding(horizontal = 10.dp)
                     )
@@ -172,7 +176,7 @@ fun SideNavigationDrawer(
                             .background(animatedBgColor)
                             .clickable {
                                 if (item.id == ActionType.CREATE_NOTE) createNoteAlert = true
-                                else onItemClick(item.id)
+                                else onItemClick(item.id, null)
                             }
                             .padding(horizontal = 8.dp)
                     )
@@ -225,6 +229,7 @@ fun SideNavigationDrawer(
                     createNoteAlert = false
                     ApiAdapter.createNote(title, description)
                     notes = ApiAdapter.getNotes()
+                    onDataChanged()
                 }
             }
         )

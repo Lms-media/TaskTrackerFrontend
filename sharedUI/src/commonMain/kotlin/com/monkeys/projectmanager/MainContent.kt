@@ -23,11 +23,14 @@ import kotlin.uuid.Uuid
 fun MainContent(
     selectedItem: ActionType,
     selectedTab: ActionType,
+    refreshKey: Int,
     clearShow: () -> Unit,
     showAllProjects: Boolean,
     clearId: () -> Unit,
     projectId: Uuid? = null,
+    noteId: Uuid? = null,
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    onDataChanged: () -> Unit,
 ) {
     var tasks by remember { mutableStateOf<List<Task>>(emptyList()) }
     var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
@@ -45,7 +48,7 @@ fun MainContent(
     val scope = rememberCoroutineScope()
     val snackMessage = stringResource(Res.string.note_saved)
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         tasks = ApiAdapter.getTasks()
         notes = ApiAdapter.getNotes()
     }
@@ -56,7 +59,10 @@ fun MainContent(
 
             tasks
                 .filter { it.status == TaskStatus.BLOCKED && it.blockedUntil < currentTime }
-                .forEach { task -> ApiAdapter.closeTask(task.id) }
+                .forEach { task ->
+                    ApiAdapter.closeTask(task.id)
+                    onDataChanged()
+                }
 
             tasks = ApiAdapter.getTasks()
 
@@ -86,6 +92,7 @@ fun MainContent(
                             currentTask.status = TaskStatus.ACTIVE_CURRENT
                             ApiAdapter.editTask(currentTask)
                             tasks = ApiAdapter.getTasks()
+                            onDataChanged()
                         }
                     }
                     AnimatedContent(
@@ -100,6 +107,8 @@ fun MainContent(
                                 task = targetTask,
                                 onTaskChanged = {
                                     tasks = ApiAdapter.getTasks()
+                                    notes = ApiAdapter.getNotes()
+                                    onDataChanged()
                                 }
                             )
                         } else {
@@ -111,18 +120,28 @@ fun MainContent(
                 }
 
                 ActionType.EDIT_LAST -> {
-                    val lastNote = remember(notes) {
-                        notes.maxByOrNull { it.createdDate }
+                    LaunchedEffect(noteId) {
+                        notes = ApiAdapter.getNotes()
                     }
-                    if (lastNote != null) {
+                    val noteToEdit = remember(notes, noteId) {
+                        notes.firstOrNull { it.id == noteId } ?: notes.maxByOrNull { it.createdDate }
+                    }
+                    if (noteToEdit != null) {
                         EditNoteScreen(
-                            note = lastNote,
+                            note = noteToEdit,
                             onSave = {
                                 scope.launch {
                                     snackbarHostState.showSnackbar(snackMessage)
                                     notes = ApiAdapter.getNotes()
+                                    onDataChanged()
                                 }
                             }
+                        )
+                    } else {
+                        NotesScreen(
+                            onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
+                            refreshKey = refreshKey,
+                            onDataChanged = onDataChanged,
                         )
                     }
                 }
@@ -134,11 +153,15 @@ fun MainContent(
                             id = projectId,
                             clearShow = clearShow,
                             showAllProjects = showAllProjects,
+                            refreshKey = refreshKey,
                             onClickGoTo = onClickGoTo,
+                            onDataChanged = onDataChanged,
                         )
 
                         ActionType.NOTES -> NotesScreen(
                             onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
+                            refreshKey = refreshKey,
+                            onDataChanged = onDataChanged,
                         )
 
                         else -> {}

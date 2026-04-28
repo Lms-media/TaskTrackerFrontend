@@ -45,27 +45,31 @@ fun ProjectDetailsScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    val lastTask by remember(project.id) {
-        derivedStateOf {
-            project.tasks.maxByOrNull { it.createdDate }
-        }
-    }
-    var showBlockInfo by remember {
-        mutableStateOf(project.status == ProjectStatus.OFF_FROM_BLOCK && lastTask != null)
-    }
-
-    val tasks by remember(project.id) {
+    val tasks by remember(project) {
         derivedStateOf { project.tasks }
     }
-    val hasActiveTask by remember(project.id) {
+    val hasActiveTask by remember(project) {
         derivedStateOf { tasks.any { it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT } }
     }
-    val activeBlockTask by remember(project.id) {
+    val activeBlockTask by remember(project) {
         derivedStateOf {
             tasks.find {
                 it.status == TaskStatus.BLOCKED && it.blockedUntil > Clock.System.now().toEpochMilliseconds()
             }
         }
+    }
+    val lastTask by remember(project) {
+        derivedStateOf {
+            project.tasks.maxByOrNull { it.createdDate }
+        }
+    }
+    var showBlockInfo by remember { mutableStateOf(false) }
+    var dismissedBlockInfoTaskId by remember(project.id) { mutableStateOf<Uuid?>(null) }
+    LaunchedEffect(project.status, lastTask?.id, activeBlockTask?.id, dismissedBlockInfoTaskId) {
+        showBlockInfo = project.status == ProjectStatus.OFF_FROM_BLOCK &&
+                activeBlockTask == null &&
+                lastTask != null &&
+                lastTask!!.id != dismissedBlockInfoTaskId
     }
 
     var createTask by remember { mutableStateOf(false) }
@@ -73,7 +77,7 @@ fun ProjectDetailsScreen(
 
     var showArchive by remember { mutableStateOf(false) }
 
-    val closedTasks by remember {
+    val closedTasks by remember(project) {
         derivedStateOf { project.tasks.filter { it.status == TaskStatus.CLOSED } }
     }
 
@@ -124,6 +128,7 @@ fun ProjectDetailsScreen(
                     onDeleteConfirmed = {
                         scope.launch {
                             ApiAdapter.closeProject(project.id)
+                            onProjectChanged()
                             onBack()
                         }
                     },
@@ -253,7 +258,7 @@ fun ProjectDetailsScreen(
                     val allProjects = ApiAdapter.getProjects()
                     val allTasks = ApiAdapter.getTasks()
                     val offProjectsCount = allProjects.count {
-                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                        it.status == ProjectStatus.OFF
                     }
                     val isWaveAlreadyActive = allTasks.any {
                         it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
@@ -288,7 +293,7 @@ fun ProjectDetailsScreen(
 
                     if (showAllProjects){
                         val nextProject = ApiAdapter.getProjects()
-                            .find { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+                            .find { it.status == ProjectStatus.OFF }
                         if (nextProject != null) {
                             onBack()
                             onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
@@ -312,7 +317,7 @@ fun ProjectDetailsScreen(
                 scope.launch {
                     val allTasks = ApiAdapter.getTasks()
                     val offProjectsCount = ApiAdapter.getProjects().count {
-                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                        it.status == ProjectStatus.OFF
                     }
                     val isWaveAlreadyActive = allTasks.any {
                         it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
@@ -380,6 +385,7 @@ fun ProjectDetailsScreen(
                 Button(
                     onClick = {
                         scope.launch {
+                            dismissedBlockInfoTaskId = lastTask!!.id
                             project.status = ProjectStatus.OFF
                             ApiAdapter.editProject(project)
                             onProjectChanged()
@@ -392,7 +398,13 @@ fun ProjectDetailsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = onBack) {
+                TextButton(
+                    onClick = {
+                        dismissedBlockInfoTaskId = lastTask!!.id
+                        showBlockInfo = false
+                        onBack()
+                    }
+                ) {
                     Text(stringResource(Res.string.back), color = Color(0xFF3B2D60))
                 }
             }

@@ -60,6 +60,7 @@ fun showTask(
                 scope.launch {
                     createNoteAlert = false
                     ApiAdapter.createNote(title, description)
+                    onTaskChanged()
                 }
             }
         )
@@ -73,6 +74,7 @@ fun showTask(
                 scope.launch {
                     ApiAdapter.createProject(name, desc)
                     createProjectAlert = false
+                    onTaskChanged()
                 }
             },
             stringResource(Res.string.create_project),
@@ -182,7 +184,7 @@ fun showGoTo(
 
     LaunchedEffect(Unit) {
         offProjectIds = ApiAdapter.getProjects()
-            .filter { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+            .filter { it.status == ProjectStatus.OFF }
             .map { it.id }
     }
 

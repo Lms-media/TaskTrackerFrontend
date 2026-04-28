@@ -21,7 +21,10 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 
@@ -57,6 +60,7 @@ object HttpApi : IApi {
         password = "Frontend123!"
     )
     private var accessToken: String? = null
+    private val authMutex = Mutex()
 
     private val client = HttpClient {
         install(ContentNegotiation) {
@@ -115,7 +119,7 @@ object HttpApi : IApi {
     }
 
     private fun AuthResponse.bearerToken(): String {
-        return accessToken ?: error("Auth response does not contain accessToken")
+        return this.accessToken ?: error("Auth response does not contain accessToken")
     }
 
     private suspend fun login(): String {
@@ -142,11 +146,15 @@ object HttpApi : IApi {
     private suspend fun ensureAuthorized() {
         if (accessToken != null) return
 
-        accessToken = runCatching {
-            login()
-        }.getOrElse {
-            register()
-            login()
+        authMutex.withLock {
+            if (accessToken != null) return
+
+            accessToken = runCatching {
+                login()
+            }.getOrElse {
+                register()
+                login()
+            }
         }
     }
 
@@ -156,6 +164,7 @@ object HttpApi : IApi {
     }
 
     suspend fun updateProjectsAndTasks() {
+        val now = Clock.System.now().toEpochMilliseconds()
         val responseProjects: List<ProjectDto> = client.get(apiUrl(projectUrl)) {
             header(HttpHeaders.Authorization, bearerHeader())
         }.body()
@@ -181,12 +190,19 @@ object HttpApi : IApi {
             }
             .map { dto ->
             val parsedTasks = loadedTasks.filter { it.projectId == dto.projectUuid }
+            val projectStatus = if (parsedTasks.any {
+                    it.status == TaskStatus.BLOCKED && it.blockedUntil > now
+                }) {
+                ProjectStatus.OFF_FROM_BLOCK
+            } else {
+                dto.status.toFrontendProjectStatus()
+            }
 
             Project(
                 dto.projectUuid,
                 dto.projectName,
                 dto.description,
-                dto.status.toFrontendProjectStatus(),
+                projectStatus,
                 parsedTasks.toMutableStateList(),
                 dto.createdAt
             )
@@ -317,6 +333,21 @@ object HttpApi : IApi {
                 setBody(task)
             }.body()
             val taskId = responseTask.taskUuid
+            val projectRequest = ProjectFullResponse(
+                project.name,
+                project.description,
+                if (status == TaskStatus.BLOCKED) {
+                    ProjectStatus.OFF_FROM_BLOCK.toBackendProjectStatus()
+                } else {
+                    ProjectStatus.ON.toBackendProjectStatus()
+                }
+            )
+            client.request(apiUrl("$projectUrl/$projectId")) {
+                method = HttpMethod.Patch
+                header(HttpHeaders.Authorization, bearerHeader())
+                contentType(KtorContentType.Application.Json)
+                setBody(projectRequest)
+            }
             updateProjectsAndTasks()
             return taskId
         }
@@ -351,7 +382,14 @@ object HttpApi : IApi {
         return if (index != -1) {
             val task = tasks[index]
             val projectNewStatus =
-                if (task.status == TaskStatus.BLOCKED) ProjectStatus.OFF_FROM_BLOCK else ProjectStatus.OFF
+                if (
+                    task.status == TaskStatus.BLOCKED &&
+                    task.blockedUntil > Clock.System.now().toEpochMilliseconds()
+                ) {
+                    ProjectStatus.OFF_FROM_BLOCK
+                } else {
+                    ProjectStatus.OFF
+                }
 
             val projIndex = projects.indexOfFirst { it.id == task.projectId }
             val projectRequest = ProjectFullResponse(

@@ -448,14 +448,22 @@ fun TaskConfirmationAlert(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(stringResource(Res.string.create_project), fontSize = 12.sp)
+                        Text(
+                            stringResource(Res.string.create_project),
+                            color = Color(0xFF3B2D60),
+                            fontSize = 12.sp
+                        )
                     }
                     OutlinedButton(
                         onClick = onCreateNote,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text(stringResource(Res.string.create_note), fontSize = 12.sp)
+                        Text(
+                            stringResource(Res.string.create_note),
+                            color = Color(0xFF3B2D60),
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
@@ -465,7 +473,7 @@ fun TaskConfirmationAlert(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B2D60))
             ) {
-                Text(stringResource(Res.string.close))
+                Text(stringResource(Res.string.close), color = Color.White)
             }
         },
         dismissButton = {

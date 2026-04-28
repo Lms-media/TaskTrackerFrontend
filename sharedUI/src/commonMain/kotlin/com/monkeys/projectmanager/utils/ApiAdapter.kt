@@ -10,24 +10,36 @@ import kotlin.uuid.Uuid
 object ApiAdapter: IApi {
     private val api: IApi = HttpApi
 
+    private fun Throwable.isExpectedCancellation(): Boolean {
+        val errorMessage = message.orEmpty()
+        return errorMessage.contains("coroutine scope left the composition", ignoreCase = true) ||
+                errorMessage.contains("Parent job is Cancelling", ignoreCase = true)
+    }
+
     override suspend fun getProjects(): List<Project> = runCatching {
         api.getProjects()
     }.getOrElse {
-        println("getProjects failed: ${it.message}")
+        if (!it.isExpectedCancellation()) {
+            println("getProjects failed: ${it.message}")
+        }
         emptyList()
     }
 
     override suspend fun getTasks(): List<Task> = runCatching {
         api.getTasks()
     }.getOrElse {
-        println("getTasks failed: ${it.message}")
+        if (!it.isExpectedCancellation()) {
+            println("getTasks failed: ${it.message}")
+        }
         emptyList()
     }
 
     override suspend fun getNotes(): List<Note> = runCatching {
         api.getNotes()
     }.getOrElse {
-        println("getNotes failed: ${it.message}")
+        if (!it.isExpectedCancellation()) {
+            println("getNotes failed: ${it.message}")
+        }
         emptyList()
     }
 
