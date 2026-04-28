@@ -6,6 +6,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
+import com.monkeys.projectmanager.models.*
 import com.monkeys.projectmanager.utils.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -28,9 +29,12 @@ fun MainContent(
     projectId: Uuid? = null,
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
 ) {
-    val activeTasks by remember {
+    var tasks by remember { mutableStateOf<List<Task>>(emptyList()) }
+    var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
+
+    val activeTasks by remember(tasks) {
         derivedStateOf {
-            ApiAdapter.getTasks().filter {
+            tasks.filter {
                 (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
                         && it.wave == WaveStatus.ACTIVE
             }
@@ -42,16 +46,19 @@ fun MainContent(
     val snackMessage = stringResource(Res.string.note_saved)
 
     LaunchedEffect(Unit) {
+        tasks = ApiAdapter.getTasks()
+        notes = ApiAdapter.getNotes()
+    }
+
+    LaunchedEffect(Unit) {
         while (true) {
             val currentTime = Clock.System.now().toEpochMilliseconds()
 
-            ApiAdapter.getTasks()
-                .filter { it.status == TaskStatus.BLOCKED }
-                .forEach { task ->
-                    if (task.blockedUntil < currentTime) {
-                        ApiAdapter.closeTask(task.id)
-                    }
-                }
+            tasks
+                .filter { it.status == TaskStatus.BLOCKED && it.blockedUntil < currentTime }
+                .forEach { task -> ApiAdapter.closeTask(task.id) }
+
+            tasks = ApiAdapter.getTasks()
 
             delay(30_000L.milliseconds)
         }
@@ -74,9 +81,12 @@ fun MainContent(
                         activeTasks.find { it.status == TaskStatus.ACTIVE_CURRENT }
                             ?: activeTasks.randomOrNull()
                     }
-                    if (currentTask != null && currentTask.status != TaskStatus.ACTIVE_CURRENT) {
-                        currentTask.status = TaskStatus.ACTIVE_CURRENT
-                        ApiAdapter.editTask(currentTask)
+                    LaunchedEffect(currentTask?.id) {
+                        if (currentTask != null && currentTask.status != TaskStatus.ACTIVE_CURRENT) {
+                            currentTask.status = TaskStatus.ACTIVE_CURRENT
+                            ApiAdapter.editTask(currentTask)
+                            tasks = ApiAdapter.getTasks()
+                        }
                     }
                     AnimatedContent(
                         targetState = currentTask,
@@ -86,7 +96,12 @@ fun MainContent(
                         label = "TaskAnimation"
                     ) { targetTask ->
                         if (targetTask != null) {
-                            showTask(task = targetTask)
+                            showTask(
+                                task = targetTask,
+                                onTaskChanged = {
+                                    tasks = ApiAdapter.getTasks()
+                                }
+                            )
                         } else {
                             showGoTo(onClickGoTo)
                         }
@@ -96,8 +111,8 @@ fun MainContent(
                 }
 
                 ActionType.EDIT_LAST -> {
-                    val lastNote = remember(ApiAdapter.getNotes()) {
-                        ApiAdapter.getNotes().maxByOrNull { it.createdDate }
+                    val lastNote = remember(notes) {
+                        notes.maxByOrNull { it.createdDate }
                     }
                     if (lastNote != null) {
                         EditNoteScreen(
@@ -105,6 +120,7 @@ fun MainContent(
                             onSave = {
                                 scope.launch {
                                     snackbarHostState.showSnackbar(snackMessage)
+                                    notes = ApiAdapter.getNotes()
                                 }
                             }
                         )

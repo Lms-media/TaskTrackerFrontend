@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.*
+import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
@@ -39,8 +40,11 @@ fun ProjectDetailsScreen(
     onBack: () -> Unit,
     clearShow: () -> Unit,
     showAllProjects: Boolean,
-    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit
+    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    onProjectChanged: suspend () -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
+
     val lastTask by remember(project.id) {
         derivedStateOf {
             project.tasks.maxByOrNull { it.createdDate }
@@ -118,8 +122,10 @@ fun ProjectDetailsScreen(
                     Spacer(modifier = Modifier.weight(1f))
                 DeleteHoldButton(
                     onDeleteConfirmed = {
-                        ApiAdapter.closeProject(project.id)
-                        onBack()
+                        scope.launch {
+                            ApiAdapter.closeProject(project.id)
+                            onBack()
+                        }
                     },
                     deleteIcon = Icons.Default.Check,
                     buttonRadius = 40.dp,
@@ -243,49 +249,54 @@ fun ProjectDetailsScreen(
                 createTask = false
             },
             onConfirm = {name, desc ->
-                val allProjects = ApiAdapter.getProjects()
-                val allTasks = ApiAdapter.getTasks()
-                val offProjectsCount = allProjects.count {
-                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
-                }
-                val isWaveAlreadyActive = allTasks.any {
-                    it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
-                }
+                scope.launch {
+                    val allProjects = ApiAdapter.getProjects()
+                    val allTasks = ApiAdapter.getTasks()
+                    val offProjectsCount = allProjects.count {
+                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                    }
+                    val isWaveAlreadyActive = allTasks.any {
+                        it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
+                    }
 
-                val targetStatus = if (!isWaveAlreadyActive && offProjectsCount <= 1) {
-                    WaveStatus.ACTIVE
-                } else {
-                    WaveStatus.WAITING
-                }
+                    val targetStatus = if (!isWaveAlreadyActive && offProjectsCount <= 1) {
+                        WaveStatus.ACTIVE
+                    } else {
+                        WaveStatus.WAITING
+                    }
 
-                if (targetStatus == WaveStatus.ACTIVE) {
-                    for (index in allTasks.indices) {
-                        val task = allTasks[index]
-                        if (task.wave == WaveStatus.WAITING) {
-                            task.wave = targetStatus
-                            ApiAdapter.editTask(task)
+                    if (targetStatus == WaveStatus.ACTIVE) {
+                        for (index in allTasks.indices) {
+                            val task = allTasks[index]
+                            if (task.wave == WaveStatus.WAITING) {
+                                task.wave = targetStatus
+                                ApiAdapter.editTask(task)
+                            }
                         }
                     }
-                }
 
-                ApiAdapter.createTask(
-                    project.id,
-                    name,
-                    desc,
-                    TaskStatus.ACTIVE,
-                    targetStatus,
-                    Clock.System.now().toEpochMilliseconds()
-                )
+                    val createdTaskId = ApiAdapter.createTask(
+                        project.id,
+                        name,
+                        desc,
+                        TaskStatus.ACTIVE,
+                        targetStatus,
+                        Clock.System.now().toEpochMilliseconds()
+                    )
+                    if (createdTaskId == null) return@launch
+                    onProjectChanged()
 
-                if (showAllProjects){
-                    val nextProject = ApiAdapter.getProjects()
-                        .find { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
-                    if (nextProject != null) {
-                        onBack()
-                        onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
-                    } else {
-                        clearShow()
+                    if (showAllProjects){
+                        val nextProject = ApiAdapter.getProjects()
+                            .find { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+                        if (nextProject != null) {
+                            onBack()
+                            onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
+                        } else {
+                            clearShow()
+                        }
                     }
+                    createTask = false
                 }
             },
             stringResource(Res.string.create_task),
@@ -298,29 +309,34 @@ fun ProjectDetailsScreen(
                 createBlockTask = false
             },
             onConfirm = {name, description, date ->
-                val allTasks = ApiAdapter.getTasks()
-                val offProjectsCount = ApiAdapter.getProjects().count {
-                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
-                }
-                val isWaveAlreadyActive = allTasks.any {
-                    it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
-                }
-
-                if (!isWaveAlreadyActive && offProjectsCount <= 1)
-                    for (index in allTasks.indices) {
-                        val task = allTasks[index]
-                        if (task.wave == WaveStatus.WAITING) {
-                            task.wave = WaveStatus.ACTIVE
-                            ApiAdapter.editTask(task)
-                        }
+                scope.launch {
+                    val allTasks = ApiAdapter.getTasks()
+                    val offProjectsCount = ApiAdapter.getProjects().count {
+                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                    }
+                    val isWaveAlreadyActive = allTasks.any {
+                        it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
                     }
 
-                ApiAdapter.blockProject(
-                    project.id,
-                    name,
-                    description,
-                    date - timeZone
-                )
+                    if (!isWaveAlreadyActive && offProjectsCount <= 1)
+                        for (index in allTasks.indices) {
+                            val task = allTasks[index]
+                            if (task.wave == WaveStatus.WAITING) {
+                                task.wave = WaveStatus.ACTIVE
+                                ApiAdapter.editTask(task)
+                            }
+                        }
+
+                    val blockTaskId = ApiAdapter.blockProject(
+                        project.id,
+                        name,
+                        description,
+                        date - timeZone
+                    )
+                    if (blockTaskId == null) return@launch
+                    onProjectChanged()
+                    createBlockTask = false
+                }
             }
         )
     }
@@ -363,9 +379,12 @@ fun ProjectDetailsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        project.status = ProjectStatus.OFF
-                        ApiAdapter.editProject(project)
-                        showBlockInfo = false
+                        scope.launch {
+                            project.status = ProjectStatus.OFF
+                            ApiAdapter.editProject(project)
+                            onProjectChanged()
+                            showBlockInfo = false
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B2D60))
                 ) {

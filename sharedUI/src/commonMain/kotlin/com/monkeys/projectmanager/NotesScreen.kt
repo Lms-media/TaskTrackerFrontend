@@ -30,7 +30,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.monkeys.projectmanager.models.Note
 import com.monkeys.projectmanager.utils.ApiAdapter
+import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.Res
 import monkeys_pm.sharedui.generated.resources.create_project
 import monkeys_pm.sharedui.generated.resources.delete
@@ -110,7 +112,12 @@ fun NotesScreen(
     onProjectCreate: (Uuid) -> Unit,
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val notes = ApiAdapter.getNotes()
+    var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        notes = ApiAdapter.getNotes()
+    }
 
     val expandedNoteIds = remember { mutableStateListOf<Uuid>() }
 
@@ -219,8 +226,11 @@ fun NotesScreen(
 
                                         DeleteHoldButton(
                                             onDeleteConfirmed = {
-                                                ApiAdapter.closeNote(note.id)
-                                                expandedNoteIds.remove(note.id)
+                                                scope.launch {
+                                                    ApiAdapter.closeNote(note.id)
+                                                    notes = ApiAdapter.getNotes()
+                                                    expandedNoteIds.remove(note.id)
+                                                }
                                             }
                                         )
                                     }
@@ -239,8 +249,11 @@ fun NotesScreen(
                 showDialog = false
             },
             onConfirm = {name, desc ->
-                val projId = ApiAdapter.createProject(name, desc)
-                onProjectCreate(projId)
+                scope.launch {
+                    val projId = ApiAdapter.createProject(name, desc)
+                    showDialog = false
+                    onProjectCreate(projId)
+                }
             },
             stringResource(Res.string.create_project),
         )

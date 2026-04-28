@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Note
 import com.monkeys.projectmanager.utils.ApiAdapter
+import kotlinx.coroutines.launch
 
 @Composable
 fun EditNoteScreen(
@@ -24,6 +25,7 @@ fun EditNoteScreen(
 ) {
     var title by remember { mutableStateOf(note.title) }
     var content by remember { mutableStateOf(note.text) }
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -77,10 +79,12 @@ fun EditNoteScreen(
         ) {
             FilledIconButton(
                 onClick = {
-                    note.title = title
-                    note.text = content
-                    ApiAdapter.editNote(note)
-                    onSave()
+                    scope.launch {
+                        note.title = title
+                        note.text = content
+                        ApiAdapter.editNote(note)
+                        onSave()
+                    }
                 },
                 modifier = Modifier.size(56.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(

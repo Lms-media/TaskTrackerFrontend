@@ -15,7 +15,7 @@ data class ProjectResponse(
 @Serializable
 @OptIn(ExperimentalUuidApi::class)
 data class ProjectFullResponse(
-    var name: String,
+    var projectName: String,
     var description: String,
     var status: Int,
 )
@@ -28,9 +28,9 @@ data class ProjectDto(
     val projectName: String,
     val description: String,
     val status: Int,
-    val createdAt: String,
-    val closedAt: String,
-    val deletedAt: String
+    val createdAt: Long,
+    val closedAt: Long? = null,
+    val deletedAt: Long? = null
 )
 
 @Serializable
@@ -48,7 +48,7 @@ data class TaskFullResponse(
     val description: String,
     val status: Int,
     val wave: Int,
-    val blockedUntil: String
+    val blockedUntilMs: Long?
 )
 
 @Serializable
@@ -60,10 +60,10 @@ data class TaskDto(
     val description: String,
     val status: Int,
     val wave: Int,
-    val createdAt: String,
-    val blockedUntil: String,
-    val completedAt: String,
-    val deletedAt: String
+    val createdAt: Long,
+    val blockedUntil: Long? = null,
+    val completedAt: Long? = null,
+    val deletedAt: Long? = null
 )
 
 @Serializable
@@ -79,6 +79,29 @@ data class NotesDto (
     val noteUuid: Uuid,
     val title: String,
     val content: String,
-    val createdAt: String,
-    val deletedAt: String
+    val createdAt: Long,
+    val deletedAt: Long? = null
+)
+
+@Serializable
+data class RegisterRequest(
+    val username: String,
+    val email: String,
+    val password: String
+)
+
+@Serializable
+data class LoginRequest(
+    val username: String,
+    val password: String
+)
+
+@Serializable
+data class AuthResponse(
+    val accessToken: String? = null,
+    val refreshToken: String? = null,
+    val username: String? = null,
+    val email: String? = null,
+    val userId: String? = null,
+    val accessTokenExpiresAt: Long? = null
 )

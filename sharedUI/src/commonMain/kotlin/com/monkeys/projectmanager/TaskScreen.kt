@@ -21,6 +21,7 @@ import com.monkeys.projectmanager.models.Task
 import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
 import com.monkeys.projectmanager.utils.ProjectStatus
+import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.uuid.ExperimentalUuidApi
@@ -29,9 +30,11 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalUuidApi::class)
 @Composable
 fun showTask(
-    task: Task
+    task: Task,
+    onTaskChanged: suspend () -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
     var showConfirmDialog by remember { mutableStateOf(false) }
     var createNoteAlert by remember { mutableStateOf(false) }
     var createProjectAlert by remember { mutableStateOf(false) }
@@ -40,8 +43,11 @@ fun showTask(
         TaskConfirmationAlert(
             onDismiss = { showConfirmDialog = false },
             onConfirm = {
-                showConfirmDialog = false
-                ApiAdapter.closeTask(task.id)
+                scope.launch {
+                    showConfirmDialog = false
+                    ApiAdapter.closeTask(task.id)
+                    onTaskChanged()
+                }
             },
             onCreateProject = { createProjectAlert = true },
             onCreateNote = { createNoteAlert = true },
@@ -51,8 +57,10 @@ fun showTask(
         CreateNoteAlert(
             onDismiss = { createNoteAlert = false },
             onConfirm = { title, description ->
-                createNoteAlert = false
-                ApiAdapter.createNote(title, description)
+                scope.launch {
+                    createNoteAlert = false
+                    ApiAdapter.createNote(title, description)
+                }
             }
         )
     }
@@ -62,7 +70,10 @@ fun showTask(
                 createProjectAlert = false
             },
             onConfirm = {name, desc ->
-                ApiAdapter.createProject(name, desc)
+                scope.launch {
+                    ApiAdapter.createProject(name, desc)
+                    createProjectAlert = false
+                }
             },
             stringResource(Res.string.create_project),
         )
@@ -165,8 +176,12 @@ fun showTask(
 fun showGoTo(
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
 ) {
-    val offProjectIds = remember {
-        ApiAdapter.getProjects()
+    var offProjectIds by remember {
+        mutableStateOf<List<Uuid>>(emptyList())
+    }
+
+    LaunchedEffect(Unit) {
+        offProjectIds = ApiAdapter.getProjects()
             .filter { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
             .map { it.id }
     }
