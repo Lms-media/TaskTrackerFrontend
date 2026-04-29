@@ -366,7 +366,7 @@ object HttpApi : IApi {
             val projectNewStatus =
                 if (
                     task.status == TaskStatus.BLOCKED &&
-                    task.blockedUntil >= Clock.System.now().toEpochMilliseconds()
+                    task.blockedUntil <= Clock.System.now().toEpochMilliseconds()
                 ) {
                     ProjectStatus.OFF_FROM_BLOCK
                 } else {

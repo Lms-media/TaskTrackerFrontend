@@ -58,7 +58,7 @@ fun MainContent(
             val currentTime = Clock.System.now().toEpochMilliseconds()
 
             tasks
-                .filter { it.status == TaskStatus.BLOCKED && it.blockedUntil >= currentTime }
+                .filter { it.status == TaskStatus.BLOCKED && it.blockedUntil <= currentTime }
                 .forEach { task ->
                     ApiAdapter.closeTask(task.id)
                     onDataChanged()
