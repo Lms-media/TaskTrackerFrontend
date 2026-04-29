@@ -25,8 +25,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
-import kotlin.time.Instant
-
 
 @OptIn(ExperimentalUuidApi::class)
 object HttpApi : IApi {
@@ -35,6 +33,7 @@ object HttpApi : IApi {
         const val IN_WORK = 1
         const val CLOSED = 3
         const val DELETED = 4
+        const val UNBLOCK = 5
     }
 
     private object BackendTaskStatus {
@@ -47,13 +46,6 @@ object HttpApi : IApi {
     private val projects = mutableStateListOf<Project>()
     private val tasks = mutableStateListOf<Task>()
     private val notes = mutableStateListOf<Note>()
-
-    private val serverUrl = "https://localhost:5273"
-    private val projectUrl = "/api/Projects"
-    private val tasksUrl = "/api/Tasks"
-    private val notesUrl = "/api/Notes"
-    private val registerUrl = "/api/Auth/register"
-    private val loginUrl = "/api/Auth/login"
     private val authUser = RegisterRequest(
         username = "frontend",
         email = "frontend@localhost.local",
@@ -72,18 +64,12 @@ object HttpApi : IApi {
             )
         }
     }
-    fun String.toMillis(): Long {
-        return Instant.parse(this).toEpochMilliseconds()
-    }
-
-    fun Long.toDateTimeString(): String {
-        return Instant.fromEpochMilliseconds(this).toString()
-    }
 
     private fun Int.toFrontendProjectStatus(): ProjectStatus {
         return when (this) {
             BackendProjectStatus.CREATED -> ProjectStatus.OFF
             BackendProjectStatus.IN_WORK -> ProjectStatus.ON
+            BackendProjectStatus.UNBLOCK -> ProjectStatus.OFF_FROM_BLOCK
             else -> ProjectStatus.ON
         }
     }
@@ -91,8 +77,8 @@ object HttpApi : IApi {
     private fun ProjectStatus.toBackendProjectStatus(): Int {
         return when (this) {
             ProjectStatus.ON -> BackendProjectStatus.IN_WORK
-            ProjectStatus.OFF,
-            ProjectStatus.OFF_FROM_BLOCK -> BackendProjectStatus.CREATED
+            ProjectStatus.OFF -> BackendProjectStatus.CREATED
+            ProjectStatus.OFF_FROM_BLOCK -> BackendProjectStatus.UNBLOCK
         }
     }
 
@@ -171,16 +157,16 @@ object HttpApi : IApi {
         val responseTasks: List<TaskDto> = client.get(apiUrl(tasksUrl)) {
             header(HttpHeaders.Authorization, bearerHeader())
         }.body()
-        val loadedTasks = responseTasks.map { tdto ->
+        val loadedTasks = responseTasks.map { responseTask ->
             Task(
-                tdto.taskUuid,
-                tdto.projectUuid,
-                tdto.title,
-                tdto.description,
-                tdto.status.toFrontendTaskStatus(),
-                WaveStatus.entries.getOrElse(tdto.wave) { WaveStatus.WAITING },
-                tdto.createdAt,
-                tdto.blockedUntil ?: 0L
+                responseTask.taskUuid,
+                responseTask.projectUuid,
+                responseTask.title,
+                responseTask.description,
+                responseTask.status.toFrontendTaskStatus(),
+                WaveStatus.entries.getOrElse(responseTask.wave) { WaveStatus.WAITING },
+                responseTask.createdAt,
+                responseTask.blockedUntil ?: 0L
             )
         }
         val loadedProjects = responseProjects
@@ -193,7 +179,7 @@ object HttpApi : IApi {
             val projectStatus = if (parsedTasks.any {
                     it.status == TaskStatus.BLOCKED && it.blockedUntil > now
                 }) {
-                ProjectStatus.OFF_FROM_BLOCK
+                ProjectStatus.ON
             } else {
                 dto.status.toFrontendProjectStatus()
             }
@@ -234,10 +220,6 @@ object HttpApi : IApi {
         notes.addAll(loadedNotes)
     }
 
-    suspend fun updateData() {
-        updateNotes()
-        updateProjectsAndTasks()
-    }
     override suspend fun getProjects(): List<Project> {
         updateProjectsAndTasks()
         return projects
@@ -384,12 +366,13 @@ object HttpApi : IApi {
             val projectNewStatus =
                 if (
                     task.status == TaskStatus.BLOCKED &&
-                    task.blockedUntil > Clock.System.now().toEpochMilliseconds()
+                    task.blockedUntil >= Clock.System.now().toEpochMilliseconds()
                 ) {
                     ProjectStatus.OFF_FROM_BLOCK
                 } else {
                     ProjectStatus.OFF
                 }
+            println("NEW_STATUS: $projectNewStatus")
 
             val projIndex = projects.indexOfFirst { it.id == task.projectId }
             val projectRequest = ProjectFullResponse(

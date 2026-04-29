@@ -51,3 +51,9 @@ enum class ActionType {
 */
 
 const val timeZone = 3 * 60 * 60 * 1000
+const val serverUrl = "https://localhost:5273"
+const val projectUrl = "/api/Projects"
+const val tasksUrl = "/api/Tasks"
+const val notesUrl = "/api/Notes"
+const val registerUrl = "/api/Auth/register"
+const val loginUrl = "/api/Auth/login"

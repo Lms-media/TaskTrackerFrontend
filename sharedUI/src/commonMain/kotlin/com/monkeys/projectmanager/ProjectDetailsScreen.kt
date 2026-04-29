@@ -63,7 +63,9 @@ fun ProjectDetailsScreen(
             project.tasks.maxByOrNull { it.createdDate }
         }
     }
-    var showBlockInfo by remember { mutableStateOf(false) }
+    var showBlockInfo by remember {
+        mutableStateOf(project.status == ProjectStatus.OFF_FROM_BLOCK && lastTask != null)
+    }
     var dismissedBlockInfoTaskId by remember(project.id) { mutableStateOf<Uuid?>(null) }
     LaunchedEffect(project.status, lastTask?.id, activeBlockTask?.id, dismissedBlockInfoTaskId) {
         showBlockInfo = project.status == ProjectStatus.OFF_FROM_BLOCK &&
@@ -258,7 +260,7 @@ fun ProjectDetailsScreen(
                     val allProjects = ApiAdapter.getProjects()
                     val allTasks = ApiAdapter.getTasks()
                     val offProjectsCount = allProjects.count {
-                        it.status == ProjectStatus.OFF
+                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
                     }
                     val isWaveAlreadyActive = allTasks.any {
                         it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
@@ -293,7 +295,7 @@ fun ProjectDetailsScreen(
 
                     if (showAllProjects){
                         val nextProject = ApiAdapter.getProjects()
-                            .find { it.status == ProjectStatus.OFF }
+                            .find { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
                         if (nextProject != null) {
                             onBack()
                             onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
@@ -317,7 +319,7 @@ fun ProjectDetailsScreen(
                 scope.launch {
                     val allTasks = ApiAdapter.getTasks()
                     val offProjectsCount = ApiAdapter.getProjects().count {
-                        it.status == ProjectStatus.OFF
+                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
                     }
                     val isWaveAlreadyActive = allTasks.any {
                         it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)

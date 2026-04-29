@@ -184,7 +184,7 @@ fun showGoTo(
 
     LaunchedEffect(Unit) {
         offProjectIds = ApiAdapter.getProjects()
-            .filter { it.status == ProjectStatus.OFF }
+            .filter { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
             .map { it.id }
     }
 

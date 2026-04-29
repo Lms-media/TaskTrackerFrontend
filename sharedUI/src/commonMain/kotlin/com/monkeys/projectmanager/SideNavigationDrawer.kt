@@ -118,7 +118,7 @@ fun SideNavigationDrawer(
             }
             val hasOffProjects by remember {
                 derivedStateOf { projects.any {
-                    it.status == ProjectStatus.OFF
+                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
                 } }
             }
             val canEditNote by remember {

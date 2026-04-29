@@ -57,14 +57,16 @@ fun ProjectsScreen(
 
     val hasOffProjects by remember(projects) {
         derivedStateOf {
-            projects.any { it.status == ProjectStatus.OFF }
+            projects.any { it.status == ProjectStatus.OFF
+                    || it.status == ProjectStatus.OFF_FROM_BLOCK
+            }
         }
     }
     val sortedProjects by remember(projects) {
         derivedStateOf {
             projects.sortedWith(
                 compareBy<Project> {
-                    it.status != ProjectStatus.OFF
+                    it.status != ProjectStatus.OFF && it.status != ProjectStatus.OFF_FROM_BLOCK
                 }.thenByDescending { it.createdDate }
             )
         }
@@ -215,11 +217,12 @@ fun ProjectItemRow(
                 .fillMaxWidth()
                 .clickable { onClick() }
                 .background(
-                    when {
-                        project.status == ProjectStatus.OFF && hasOffProjects -> Color(0xFFFFEBEE)
-                        project.status == ProjectStatus.OFF_FROM_BLOCK -> Color(0xFFFFF8E1)
-                        else -> Color(0xFFE8F5E9)
-                    }
+                    if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK)
+                        && hasOffProjects
+                    ) Color(
+                        0xFFFFEBEE
+                    )
+                    else Color(0xFFE8F5E9)
                 )
                 .padding(vertical = 24.dp, horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -234,14 +237,16 @@ fun ProjectItemRow(
                 color = Color.Black
             )
 
-            if (project.status == ProjectStatus.OFF_FROM_BLOCK) {
-                Icon(
-                    imageVector = Icons.Default.HourglassEmpty,
-                    contentDescription = null,
-                    tint = Color(0xFF3B2D60),
-                    modifier = Modifier.size(32.dp)
-                )
-            } else if (project.status == ProjectStatus.OFF && hasOffProjects) {
+            if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK) && hasOffProjects) {
+                if (project.status == ProjectStatus.OFF_FROM_BLOCK && hasOffProjects) {
+                    Icon(
+                        imageVector = Icons.Default.HourglassEmpty,
+                        contentDescription = null,
+                        tint = Color(0xFF3B2D60),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,
