@@ -6,13 +6,6 @@ import kotlin.uuid.Uuid
 
 @Serializable
 @OptIn(ExperimentalUuidApi::class)
-data class ProjectResponse(
-    val projectName: String,
-    val description: String
-)
-
-@Serializable
-@OptIn(ExperimentalUuidApi::class)
 data class ProjectFullResponse(
     var projectName: String,
     var description: String,
@@ -30,14 +23,6 @@ data class ProjectDto(
     val createdAt: Long,
     val closedAt: Long? = null,
     val deletedAt: Long? = null
-)
-
-@Serializable
-@OptIn(ExperimentalUuidApi::class)
-data class TaskResponse(
-    val title: String,
-    val description: String,
-    val wave: Int
 )
 
 @Serializable

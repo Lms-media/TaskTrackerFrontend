@@ -78,7 +78,7 @@ fun ProjectsScreen(
     }
 
     AnimatedContent(
-        targetState = selectedProject,
+        targetState = selectedProject?.id,
         transitionSpec = {
             if (targetState != null) {
                 (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
@@ -89,7 +89,8 @@ fun ProjectsScreen(
             }
         },
         label = "ProjectTransition"
-    ) { currentProject ->
+    ) { currentProjectId ->
+        val currentProject = selectedProject?.takeIf { it.id == currentProjectId }
         if (currentProject == null) {
             Column(
                 modifier = Modifier

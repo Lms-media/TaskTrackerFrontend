@@ -96,12 +96,13 @@ fun MainContent(
                         }
                     }
                     AnimatedContent(
-                        targetState = currentTask,
+                        targetState = currentTask?.id,
                         transitionSpec = {
                             (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
                         },
                         label = "TaskAnimation"
-                    ) { targetTask ->
+                    ) { targetTaskId ->
+                        val targetTask = activeTasks.firstOrNull { it.id == targetTaskId }
                         if (targetTask != null) {
                             showTask(
                                 task = targetTask,
