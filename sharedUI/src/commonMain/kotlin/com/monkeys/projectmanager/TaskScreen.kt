@@ -188,50 +188,55 @@ fun showGoTo(
             .map { it.id }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(16.dp)
-            .background(Color(0xFFFAFAFA)),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFFFAFAFA)
+    ){
+        Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(16.dp)
+                .background(Color(0xFFFAFAFA)),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = stringResource(Res.string.no_tasks),
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color(0xFFA9A9A9),
-                maxLines = 1
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(Res.string.no_tasks),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFFA9A9A9),
+                    maxLines = 1
+                )
+            }
+            ElevatedButton(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .height(50.dp)
+                    .fillMaxWidth(),
+                onClick = {
+                    if (offProjectIds.isNotEmpty()) {
+                        onClickGoTo(ActionType.PROJECTS, offProjectIds.first(), true)
+                    } else {
+                        onClickGoTo(ActionType.PROJECTS, null, false)
+                    }
+                },
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = Color(0xFF3B2D60),
+                    contentColor = Color.White
+                ),
+                content = {
+                    Icon(Icons.Default.Folder, contentDescription = null)
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(
+                        stringResource(Res.string.go_to_create_tasks),
+                        maxLines = 1)
+                }
             )
         }
-        ElevatedButton(
-            modifier = Modifier
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-                .height(50.dp)
-                .fillMaxWidth(),
-            onClick = {
-                if (offProjectIds.isNotEmpty()) {
-                    onClickGoTo(ActionType.PROJECTS, offProjectIds.first(), true)
-                } else {
-                    onClickGoTo(ActionType.PROJECTS, null, false)
-                }
-            },
-            colors = ButtonDefaults.elevatedButtonColors(
-                containerColor = Color(0xFF3B2D60),
-                contentColor = Color.White
-            ),
-            content = {
-                Icon(Icons.Default.Folder, contentDescription = null)
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text(
-                    stringResource(Res.string.go_to_create_tasks),
-                    maxLines = 1)
-            }
-        )
     }
 }

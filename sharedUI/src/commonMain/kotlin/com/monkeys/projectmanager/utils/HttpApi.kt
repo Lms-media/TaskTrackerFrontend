@@ -277,6 +277,9 @@ object HttpApi : IApi {
     override suspend fun closeProject(id: Uuid): Boolean {
         val index = projects.indexOfFirst { it.id == id }
         return if (index != -1) {
+            projects[index].tasks.forEach { task ->
+                closeTask(task.id)
+            }
             val request = apiUrl("$projectUrl/$id/close")
             client.request(request) {
                 method = HttpMethod.Patch
@@ -372,7 +375,6 @@ object HttpApi : IApi {
                 } else {
                     ProjectStatus.OFF
                 }
-            println("NEW_STATUS: $projectNewStatus")
 
             val projIndex = projects.indexOfFirst { it.id == task.projectId }
             val projectRequest = ProjectFullResponse(
