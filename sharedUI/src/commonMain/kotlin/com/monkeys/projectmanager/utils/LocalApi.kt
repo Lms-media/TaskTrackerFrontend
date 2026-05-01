@@ -14,11 +14,11 @@ object LocalApi : IApi {
     private val tasks = mutableStateListOf<Task>()
     private val notes = mutableStateListOf<Note>()
 
-    override fun getProjects(): List<Project> = projects
-    override fun getTasks(): List<Task> = tasks
-    override fun getNotes(): List<Note> = notes
+    override suspend fun getProjects(): List<Project> = projects
+    override suspend fun getTasks(): List<Task> = tasks
+    override suspend fun getNotes(): List<Note> = notes
 
-    override fun createProject(name: String, description: String): Uuid {
+    override suspend fun createProject(name: String, description: String): Uuid {
         val projectId = Uuid.random()
         projects.add(
             Project(
@@ -33,11 +33,11 @@ object LocalApi : IApi {
         return projectId
     }
 
-    override fun getProject(id: Uuid): Project? {
+    override suspend fun getProject(id: Uuid): Project? {
         return projects.find { it.id == id }?.let { return it }
     }
 
-    override fun editProject(project: Project): Boolean {
+    override suspend fun editProject(project: Project): Boolean {
         val index = projects.indexOfFirst { it.id == project.id }
         return if (index != -1) {
             projects.removeAt(index)
@@ -46,11 +46,11 @@ object LocalApi : IApi {
         } else false
     }
 
-    override fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid? {
+    override suspend fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid? {
         return createTask(id, name, description, TaskStatus.BLOCKED, WaveStatus.ACTIVE, blockedUntil)
     }
 
-    override fun closeProject(id: Uuid): Boolean {
+    override suspend fun closeProject(id: Uuid): Boolean {
         val index = projects.indexOfFirst { it.id == id }
         return if (index != -1) {
             projects[index].tasks.forEach { task ->
@@ -62,7 +62,7 @@ object LocalApi : IApi {
         } else false
     }
 
-    override fun createTask(
+    override suspend fun createTask(
         projectId: Uuid,
         title: String,
         description: String,
@@ -96,7 +96,7 @@ object LocalApi : IApi {
         return null
     }
 
-    override fun editTask(task: Task): Boolean {
+    override suspend fun editTask(task: Task): Boolean {
         val index = tasks.indexOfFirst { it.id == task.id }
         return if (index != -1) {
             tasks.removeAt(index)
@@ -105,7 +105,7 @@ object LocalApi : IApi {
         } else false
     }
 
-    override fun closeTask(id: Uuid): Boolean {
+    override suspend fun closeTask(id: Uuid): Boolean {
         val index = tasks.indexOfFirst { it.id == id }
 
         return if (index != -1) {
@@ -132,7 +132,7 @@ object LocalApi : IApi {
         } else false
     }
 
-    override fun createNote(title: String, text: String): Uuid {
+    override suspend fun createNote(title: String, text: String): Uuid {
         val noteId = Uuid.random()
         notes.add(
             Note(
@@ -145,7 +145,7 @@ object LocalApi : IApi {
         return noteId
     }
 
-    override fun editNote(note: Note): Boolean {
+    override suspend fun editNote(note: Note): Boolean {
         val index = notes.indexOfFirst { it.id == note.id }
         return if (index != -1) {
             notes.removeAt(index)
@@ -154,7 +154,7 @@ object LocalApi : IApi {
         } else false
     }
 
-    override fun closeNote(id: Uuid): Boolean {
+    override suspend fun closeNote(id: Uuid): Boolean {
         val index = notes.indexOfFirst { it.id == id }
         return if (index != -1) {
             notes.removeAt(index)

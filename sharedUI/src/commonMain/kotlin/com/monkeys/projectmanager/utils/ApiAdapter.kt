@@ -8,27 +8,82 @@ import kotlin.uuid.Uuid
 
 @OptIn(ExperimentalUuidApi::class)
 object ApiAdapter: IApi {
-    private val api: IApi = LocalApi
+    private val api: IApi = HttpApi
 
-    override fun getProjects(): List<Project> = api.getProjects()
-    override fun getTasks(): List<Task> = api.getTasks()
-    override fun getNotes(): List<Note> = api.getNotes()
-    override fun createProject(name: String, description: String): Uuid {
+    private fun Throwable.isExpectedCancellation(): Boolean {
+        val errorMessage = message.orEmpty()
+        return errorMessage.contains("coroutine scope left the composition", ignoreCase = true) ||
+                errorMessage.contains("Parent job is Cancelling", ignoreCase = true)
+    }
+
+    override suspend fun getProjects(): List<Project> = runCatching {
+        api.getProjects()
+    }.getOrElse {
+        if (!it.isExpectedCancellation()) {
+            println("getProjects failed: ${it.message}")
+        }
+        emptyList()
+    }
+
+    override suspend fun getTasks(): List<Task> = runCatching {
+        api.getTasks()
+    }.getOrElse {
+        if (!it.isExpectedCancellation()) {
+            println("getTasks failed: ${it.message}")
+        }
+        emptyList()
+    }
+
+    override suspend fun getNotes(): List<Note> = runCatching {
+        api.getNotes()
+    }.getOrElse {
+        if (!it.isExpectedCancellation()) {
+            println("getNotes failed: ${it.message}")
+        }
+        emptyList()
+    }
+
+    override suspend fun createProject(name: String, description: String): Uuid {
         return api.createProject(name, description)
     }
-    override fun getProject(id: Uuid): Project? {
-        return api.getProject(id)
+
+    override suspend fun getProject(id: Uuid): Project? {
+        return runCatching {
+            api.getProject(id)
+        }.getOrElse {
+            println("getProject failed: ${it.message}")
+            null
+        }
     }
-    override fun editProject(project: Project): Boolean {
-        return api.editProject(project)
+
+    override suspend fun editProject(project: Project): Boolean {
+        return runCatching {
+            api.editProject(project)
+        }.getOrElse {
+            println("editProject failed: ${it.message}")
+            false
+        }
     }
-    override fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid? {
-        return api.blockProject(id, name, description, blockedUntil)
+
+    override suspend fun blockProject(id: Uuid, name: String, description: String, blockedUntil: Long): Uuid? {
+        return runCatching {
+            api.blockProject(id, name, description, blockedUntil)
+        }.getOrElse {
+            println("blockProject failed: ${it.message}")
+            null
+        }
     }
-    override fun closeProject(id: Uuid): Boolean {
-        return api.closeProject(id)
+
+    override suspend fun closeProject(id: Uuid): Boolean {
+        return runCatching {
+            api.closeProject(id)
+        }.getOrElse {
+            println("closeProject failed: ${it.message}")
+            false
+        }
     }
-    override fun createTask(
+
+    override suspend fun createTask(
         projectId: Uuid,
         title: String,
         description: String,
@@ -36,21 +91,51 @@ object ApiAdapter: IApi {
         wave: WaveStatus,
         blockedUntil: Long
     ): Uuid? {
-        return api.createTask(projectId, title, description, status, wave, blockedUntil)
+        return runCatching {
+            api.createTask(projectId, title, description, status, wave, blockedUntil)
+        }.getOrElse {
+            println("createTask failed: ${it.message}")
+            null
+        }
     }
-    override fun editTask(task: Task): Boolean {
-        return api.editTask(task)
+
+    override suspend fun editTask(task: Task): Boolean {
+        return runCatching {
+            api.editTask(task)
+        }.getOrElse {
+            println("editTask failed: ${it.message}")
+            false
+        }
     }
-    override fun closeTask(id: Uuid): Boolean {
-        return api.closeTask(id)
+
+    override suspend fun closeTask(id: Uuid): Boolean {
+        return runCatching {
+            api.closeTask(id)
+        }.getOrElse {
+            println("closeTask failed: ${it.message}")
+            false
+        }
     }
-    override fun createNote(title: String, text: String): Uuid {
+
+    override suspend fun createNote(title: String, text: String): Uuid {
         return api.createNote(title, text)
     }
-    override fun editNote(note: Note): Boolean {
-        return api.editNote(note)
+
+    override suspend fun editNote(note: Note): Boolean {
+        return runCatching {
+            api.editNote(note)
+        }.getOrElse {
+            println("editNote failed: ${it.message}")
+            false
+        }
     }
-    override fun closeNote(id: Uuid): Boolean {
-        return api.closeNote(id)
+
+    override suspend fun closeNote(id: Uuid): Boolean {
+        return runCatching {
+            api.closeNote(id)
+        }.getOrElse {
+            println("closeNote failed: ${it.message}")
+            false
+        }
     }
 }

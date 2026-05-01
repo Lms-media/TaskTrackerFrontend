@@ -23,6 +23,7 @@ import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
 import com.monkeys.projectmanager.utils.ProjectStatus
+import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.Res
 import monkeys_pm.sharedui.generated.resources.create_project
 import monkeys_pm.sharedui.generated.resources.no_all_projects_full
@@ -37,27 +38,39 @@ fun ProjectsScreen(
     clearId: () -> Unit,
     clearShow: () -> Unit,
     showAllProjects: Boolean,
+    refreshKey: Int,
     id: Uuid? = null,
-    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit
+    onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    onDataChanged: () -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val hasOffProjects by remember {
-        derivedStateOf {
-            ApiAdapter.getProjects().any { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+    var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
+    var selectedProject by remember { mutableStateOf<Project?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(refreshKey) {
+        projects = ApiAdapter.getProjects()
+        selectedProject?.let { project ->
+            selectedProject = ApiAdapter.getProject(project.id)
         }
     }
-    val projects by remember {
+
+    val hasOffProjects by remember(projects) {
         derivedStateOf {
-            hasOffProjects
-            ApiAdapter.getProjects().sortedWith(
+            projects.any { it.status == ProjectStatus.OFF
+                    || it.status == ProjectStatus.OFF_FROM_BLOCK
+            }
+        }
+    }
+    val sortedProjects by remember(projects) {
+        derivedStateOf {
+            projects.sortedWith(
                 compareBy<Project> {
                     it.status != ProjectStatus.OFF && it.status != ProjectStatus.OFF_FROM_BLOCK
                 }.thenByDescending { it.createdDate }
             )
         }
     }
-    var selectedProject by remember { mutableStateOf<Project?>(null) }
-
     LaunchedEffect(id) {
         if (id != null) {
             selectedProject = ApiAdapter.getProject(id)
@@ -65,7 +78,7 @@ fun ProjectsScreen(
     }
 
     AnimatedContent(
-        targetState = selectedProject,
+        targetState = selectedProject?.id,
         transitionSpec = {
             if (targetState != null) {
                 (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
@@ -76,7 +89,8 @@ fun ProjectsScreen(
             }
         },
         label = "ProjectTransition"
-    ) { currentProject ->
+    ) { currentProjectId ->
+        val currentProject = selectedProject?.takeIf { it.id == currentProjectId }
         if (currentProject == null) {
             Column(
                 modifier = Modifier
@@ -84,7 +98,7 @@ fun ProjectsScreen(
                     .background(Color(0xFFF5F5F5))
             ) {
                 Box(modifier = Modifier.weight(1f)) {
-                    if (projects.isNotEmpty()) {
+                    if (sortedProjects.isNotEmpty()) {
                         Column(modifier = Modifier.fillMaxSize()) {
                             if (hasOffProjects) {
                                 Text(
@@ -107,7 +121,7 @@ fun ProjectsScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(
-                                    projects,
+                                    sortedProjects,
                                     key = { "${it.id}_${it.status}" }
                                 ) { project ->
                                     println("project title: ${project.name}")
@@ -156,10 +170,19 @@ fun ProjectsScreen(
                 selectedProject = null
                 clearId()
                 clearShow()
+                scope.launch {
+                    projects = ApiAdapter.getProjects()
+                    onDataChanged()
+                }
             },
             clearShow = clearShow,
             showAllProjects = showAllProjects,
-            onClickGoTo = onClickGoTo
+            onClickGoTo = onClickGoTo,
+            onProjectChanged = {
+                projects = ApiAdapter.getProjects()
+                selectedProject = ApiAdapter.getProject(currentProject.id)
+                onDataChanged()
+            }
         )
     }
 
@@ -169,7 +192,12 @@ fun ProjectsScreen(
                 showDialog = false
             },
             onConfirm = { name, desc ->
-                ApiAdapter.createProject(name, desc)
+                scope.launch {
+                    ApiAdapter.createProject(name, desc)
+                    projects = ApiAdapter.getProjects()
+                    onDataChanged()
+                    showDialog = false
+                }
             },
             stringResource(Res.string.create_project),
         )

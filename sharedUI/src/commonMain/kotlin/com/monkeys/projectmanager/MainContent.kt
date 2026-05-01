@@ -6,6 +6,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
+import com.monkeys.projectmanager.models.*
 import com.monkeys.projectmanager.utils.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -22,15 +23,21 @@ import kotlin.uuid.Uuid
 fun MainContent(
     selectedItem: ActionType,
     selectedTab: ActionType,
+    refreshKey: Int,
     clearShow: () -> Unit,
     showAllProjects: Boolean,
     clearId: () -> Unit,
     projectId: Uuid? = null,
+    noteId: Uuid? = null,
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    onDataChanged: () -> Unit,
 ) {
-    val activeTasks by remember {
+    var tasks by remember { mutableStateOf<List<Task>>(emptyList()) }
+    var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
+
+    val activeTasks by remember(tasks) {
         derivedStateOf {
-            ApiAdapter.getTasks().filter {
+            tasks.filter {
                 (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
                         && it.wave == WaveStatus.ACTIVE
             }
@@ -41,17 +48,23 @@ fun MainContent(
     val scope = rememberCoroutineScope()
     val snackMessage = stringResource(Res.string.note_saved)
 
+    LaunchedEffect(refreshKey) {
+        tasks = ApiAdapter.getTasks()
+        notes = ApiAdapter.getNotes()
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             val currentTime = Clock.System.now().toEpochMilliseconds()
 
-            ApiAdapter.getTasks()
-                .filter { it.status == TaskStatus.BLOCKED }
+            tasks
+                .filter { it.status == TaskStatus.BLOCKED && it.blockedUntil <= currentTime }
                 .forEach { task ->
-                    if (task.blockedUntil < currentTime) {
-                        ApiAdapter.closeTask(task.id)
-                    }
+                    ApiAdapter.closeTask(task.id)
+                    onDataChanged()
                 }
+
+            tasks = ApiAdapter.getTasks()
 
             delay(30_000L.milliseconds)
         }
@@ -74,19 +87,31 @@ fun MainContent(
                         activeTasks.find { it.status == TaskStatus.ACTIVE_CURRENT }
                             ?: activeTasks.randomOrNull()
                     }
-                    if (currentTask != null && currentTask.status != TaskStatus.ACTIVE_CURRENT) {
-                        currentTask.status = TaskStatus.ACTIVE_CURRENT
-                        ApiAdapter.editTask(currentTask)
+                    LaunchedEffect(currentTask?.id) {
+                        if (currentTask != null && currentTask.status != TaskStatus.ACTIVE_CURRENT) {
+                            currentTask.status = TaskStatus.ACTIVE_CURRENT
+                            ApiAdapter.editTask(currentTask)
+                            tasks = ApiAdapter.getTasks()
+                            onDataChanged()
+                        }
                     }
                     AnimatedContent(
-                        targetState = currentTask,
+                        targetState = currentTask?.id,
                         transitionSpec = {
                             (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
                         },
                         label = "TaskAnimation"
-                    ) { targetTask ->
+                    ) { targetTaskId ->
+                        val targetTask = activeTasks.firstOrNull { it.id == targetTaskId }
                         if (targetTask != null) {
-                            showTask(task = targetTask)
+                            showTask(
+                                task = targetTask,
+                                onTaskChanged = {
+                                    tasks = ApiAdapter.getTasks()
+                                    notes = ApiAdapter.getNotes()
+                                    onDataChanged()
+                                }
+                            )
                         } else {
                             showGoTo(onClickGoTo)
                         }
@@ -96,17 +121,28 @@ fun MainContent(
                 }
 
                 ActionType.EDIT_LAST -> {
-                    val lastNote = remember(ApiAdapter.getNotes()) {
-                        ApiAdapter.getNotes().maxByOrNull { it.createdDate }
+                    LaunchedEffect(noteId) {
+                        notes = ApiAdapter.getNotes()
                     }
-                    if (lastNote != null) {
+                    val noteToEdit = remember(notes, noteId) {
+                        notes.firstOrNull { it.id == noteId } ?: notes.maxByOrNull { it.createdDate }
+                    }
+                    if (noteToEdit != null) {
                         EditNoteScreen(
-                            note = lastNote,
+                            note = noteToEdit,
                             onSave = {
                                 scope.launch {
                                     snackbarHostState.showSnackbar(snackMessage)
+                                    notes = ApiAdapter.getNotes()
+                                    onDataChanged()
                                 }
                             }
+                        )
+                    } else {
+                        NotesScreen(
+                            onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
+                            refreshKey = refreshKey,
+                            onDataChanged = onDataChanged,
                         )
                     }
                 }
@@ -118,11 +154,15 @@ fun MainContent(
                             id = projectId,
                             clearShow = clearShow,
                             showAllProjects = showAllProjects,
+                            refreshKey = refreshKey,
                             onClickGoTo = onClickGoTo,
+                            onDataChanged = onDataChanged,
                         )
 
                         ActionType.NOTES -> NotesScreen(
                             onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
+                            refreshKey = refreshKey,
+                            onDataChanged = onDataChanged,
                         )
 
                         else -> {}

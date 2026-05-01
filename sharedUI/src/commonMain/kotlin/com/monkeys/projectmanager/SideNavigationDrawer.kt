@@ -20,13 +20,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.monkeys.projectmanager.models.Note
+import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 
 @OptIn(ExperimentalUuidApi::class)
@@ -35,15 +39,22 @@ fun SideNavigationDrawer(
     isExpanded: Boolean,
     selectedItem: ActionType,
     selectedTab: ActionType,
-    onItemClick: (ActionType) -> Unit,
+    refreshKey: Int,
+    onItemClick: (ActionType, Uuid?) -> Unit,
     onTabClick: (ActionType) -> Unit,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onDataChanged: () -> Unit
 ) {
     var currentTime by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
+    var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
+    var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshKey) {
         while (true) {
             currentTime = Clock.System.now().toEpochMilliseconds()
+            notes = ApiAdapter.getNotes()
+            projects = ApiAdapter.getProjects()
             delay(30000L.milliseconds)
         }
     }
@@ -103,10 +114,10 @@ fun SideNavigationDrawer(
             Spacer(Modifier.height(24.dp))
 
             val notesNotEmpty by remember {
-                derivedStateOf { ApiAdapter.getNotes().isNotEmpty() }
+                derivedStateOf { notes.isNotEmpty() }
             }
             val hasOffProjects by remember {
-                derivedStateOf { ApiAdapter.getProjects().any {
+                derivedStateOf { projects.any {
                     it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
                 } }
             }
@@ -114,7 +125,7 @@ fun SideNavigationDrawer(
                 derivedStateOf {
                     val now = currentTime
                     if (!notesNotEmpty) return@derivedStateOf false
-                    val lastNote = ApiAdapter.getNotes().maxByOrNull { it.createdDate }
+                    val lastNote = notes.maxByOrNull { it.createdDate }
                     lastNote?.let {
                         //(now - it.createdDate) <= 10_000L
                         (now - it.createdDate) <= 1_800_000L
@@ -147,7 +158,8 @@ fun SideNavigationDrawer(
                             .clip(CircleShape)
                             .background(animatedBgColor)
                             .clickable {
-                                onItemClick(item.id)
+                                val lastNote = notes.maxByOrNull { it.createdDate }
+                                onItemClick(item.id, lastNote?.id)
                             }
                             .padding(horizontal = 10.dp)
                     )
@@ -164,7 +176,7 @@ fun SideNavigationDrawer(
                             .background(animatedBgColor)
                             .clickable {
                                 if (item.id == ActionType.CREATE_NOTE) createNoteAlert = true
-                                else onItemClick(item.id)
+                                else onItemClick(item.id, null)
                             }
                             .padding(horizontal = 8.dp)
                     )
@@ -213,8 +225,12 @@ fun SideNavigationDrawer(
         CreateNoteAlert(
             onDismiss = {createNoteAlert = false},
             onConfirm = {title, description ->
-                createNoteAlert = false
-                ApiAdapter.createNote(title, description)
+                scope.launch {
+                    createNoteAlert = false
+                    ApiAdapter.createNote(title, description)
+                    notes = ApiAdapter.getNotes()
+                    onDataChanged()
+                }
             }
         )
 }
