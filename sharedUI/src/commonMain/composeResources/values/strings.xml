@@ -43,9 +43,10 @@
     <string name="no_task_archive">В архиве пока нет задач</string>
     <string name="note_saved">Заметка сохранена</string>
     <string name="delete">Удалить</string>
-    <string name="note_title">Заголовок заметки</string>
-    <string name="note_text">Текст заметки...</string>
+    <string name="note_title">Заголовок</string>
+    <string name="note_text">Текст...</string>
     <string name="save">Сохранить</string>
     <string name="close_task">Завершить задачу?</string>
     <string name="blocked_task_from">Блокирующая задача от: %1$s</string>
+    <string name="marks">Пометки</string>
 </resources>

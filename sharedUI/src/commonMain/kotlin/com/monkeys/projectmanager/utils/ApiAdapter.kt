@@ -1,5 +1,6 @@
 package com.monkeys.projectmanager.utils
 
+import com.monkeys.projectmanager.models.Mark
 import com.monkeys.projectmanager.models.Note
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.models.Task
@@ -39,6 +40,15 @@ object ApiAdapter: IApi {
     }.getOrElse {
         if (!it.isExpectedCancellation()) {
             println("getNotes failed: ${it.message}")
+        }
+        emptyList()
+    }
+
+    override suspend fun getMarks(projectId: Uuid): List<Mark> = runCatching {
+        api.getMarks(projectId)
+    }.getOrElse {
+        if (!it.isExpectedCancellation()) {
+            println("getMarks failed: ${it.message}")
         }
         emptyList()
     }
@@ -135,6 +145,32 @@ object ApiAdapter: IApi {
             api.closeNote(id)
         }.getOrElse {
             println("closeNote failed: ${it.message}")
+            false
+        }
+    }
+
+    override suspend fun createMark(
+        projectId: Uuid,
+        title: String,
+        description: String
+    ): Uuid? {
+        return api.createMark(projectId, title, description)
+    }
+
+    override suspend fun editMark(mark: Mark): Boolean {
+        return runCatching {
+            api.editMark(mark)
+        }.getOrElse {
+            println("editMark failed: ${it.message}")
+            false
+        }
+    }
+
+    override suspend fun deleteMark(id: Uuid, projectId: Uuid): Boolean {
+        return runCatching {
+            api.deleteMark(id, projectId)
+        }.getOrElse {
+            println("deleteMark failed: ${it.message}")
             false
         }
     }

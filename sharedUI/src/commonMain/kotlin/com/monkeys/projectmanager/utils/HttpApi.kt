@@ -2,6 +2,7 @@ package com.monkeys.projectmanager.utils
 
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.toMutableStateList
+import com.monkeys.projectmanager.models.Mark
 import com.monkeys.projectmanager.models.Note
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.models.Task
@@ -19,6 +20,7 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType as KtorContentType
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.sync.Mutex
@@ -233,6 +235,26 @@ object HttpApi : IApi {
         return notes
     }
 
+    fun getMarksUrl(projectId: Uuid): String = "/api/projects/$projectId/marks"
+    override suspend fun getMarks(projectId: Uuid): List<Mark> {
+        val marks = mutableStateListOf<Mark>()
+        val responseMarks: List<MarksDto> = client.get(apiUrl(getMarksUrl(projectId))) {
+            header(HttpHeaders.Authorization, bearerHeader())
+        }.body()
+        val loadedNotes = responseMarks.map { dto ->
+            Mark(
+                dto.markUuid,
+                dto.projectUuid,
+                dto.title,
+                dto.description,
+                dto.createdAt,
+            )
+        }
+
+        marks.addAll(loadedNotes)
+        return marks
+    }
+
     override suspend fun createProject(name: String, description: String): Uuid {
         val projectResponse = ProjectFullResponse(name, description, ProjectStatus.OFF.toBackendProjectStatus())
         val responseProject: ProjectDto = client.post(apiUrl(projectUrl)) {
@@ -445,5 +467,48 @@ object HttpApi : IApi {
             updateNotes()
             true
         } else false
+    }
+
+    override suspend fun createMark(
+        projectId: Uuid,
+        title: String,
+        description: String
+    ): Uuid {
+        val request = apiUrl(getMarksUrl(projectId))
+        val markRequest = MarkResponse(
+            title,
+            description,
+        )
+        val outputMark: MarksDto = client.post(request) {
+            header(HttpHeaders.Authorization, bearerHeader())
+            contentType(KtorContentType.Application.Json)
+            setBody(markRequest)
+        }.body()
+        return outputMark.markUuid
+    }
+
+    override suspend fun editMark(mark: Mark): Boolean {
+        val request = apiUrl("${getMarksUrl(mark.projectId)}/${mark.id}")
+        val markRequest = MarkResponse(
+            mark.title,
+            mark.text,
+        )
+        val response = client.request(request) {
+            method = HttpMethod.Patch
+            header(HttpHeaders.Authorization, bearerHeader())
+            contentType(KtorContentType.Application.Json)
+            setBody(markRequest)
+        }
+        updateNotes()
+        return response.status == HttpStatusCode.OK
+    }
+
+    override suspend fun deleteMark(id: Uuid, projectId: Uuid): Boolean {
+        val request = apiUrl("${getMarksUrl(projectId)}/$id")
+        val response = client.request(request) {
+            method = HttpMethod.Delete
+            header(HttpHeaders.Authorization, bearerHeader())
+        }
+        return response.status == HttpStatusCode.OK
     }
 }

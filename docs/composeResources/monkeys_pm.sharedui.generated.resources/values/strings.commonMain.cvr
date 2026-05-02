@@ -21,6 +21,7 @@ string|exit|0JLRi9C50YLQuA==
 string|get_back|0JLQtdGA0L3Rg9GC0YzRgdGPINC90LDQt9Cw0LQ=
 string|get_task|0JTQsNC5INC30LDQtNCw0YfRgw==
 string|go_to_create_tasks|0J/QtdGA0LXQudGC0Lgg0Log0YHQvtC30LTQsNC90LjRjiDQt9Cw0LTQsNGH
+string|marks|0J/QvtC80LXRgtC60Lg=
 string|monkeys_roject_manager|TW9ua2V5cyBQcm9qZWN0IG1hbmFnZXI=
 string|name|0J3QsNC30LLQsNC90LjQtQ==
 string|new_project|0J3QvtCy0YvQuSDQv9GA0L7QtdC60YI=
@@ -32,8 +33,8 @@ string|no_projects|0J3QtdGCINC/0YDQvtC10LrRgtC+0LI=
 string|no_task_archive|0JIg0LDRgNGF0LjQstC1INC/0L7QutCwINC90LXRgiDQt9Cw0LTQsNGH
 string|no_tasks|0J3QtdGCINC30LDQtNCw0Yc=
 string|note_saved|0JfQsNC80LXRgtC60LAg0YHQvtGF0YDQsNC90LXQvdCw
-string|note_text|0KLQtdC60YHRgiDQt9Cw0LzQtdGC0LrQuC4uLg==
-string|note_title|0JfQsNCz0L7Qu9C+0LLQvtC6INC30LDQvNC10YLQutC4
+string|note_text|0KLQtdC60YHRgi4uLg==
+string|note_title|0JfQsNCz0L7Qu9C+0LLQvtC6
 string|notes|0JfQsNC80LXRgtC60Lg=
 string|ok|0J7Qmg==
 string|run|UnVu

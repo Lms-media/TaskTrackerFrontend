@@ -1,6 +1,7 @@
 package com.monkeys.projectmanager.utils
 
 import androidx.compose.runtime.mutableStateListOf
+import com.monkeys.projectmanager.models.Mark
 import com.monkeys.projectmanager.models.Note
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.models.Task
@@ -13,10 +14,12 @@ object LocalApi : IApi {
     private val projects = mutableStateListOf<Project>()
     private val tasks = mutableStateListOf<Task>()
     private val notes = mutableStateListOf<Note>()
+    private val marks = mutableStateListOf<Mark>()
 
     override suspend fun getProjects(): List<Project> = projects
     override suspend fun getTasks(): List<Task> = tasks
     override suspend fun getNotes(): List<Note> = notes
+    override suspend fun getMarks(projectId: Uuid): List<Mark> = marks
 
     override suspend fun createProject(name: String, description: String): Uuid {
         val projectId = Uuid.random()
@@ -160,5 +163,21 @@ object LocalApi : IApi {
             notes.removeAt(index)
             true
         } else false
+    }
+
+    override suspend fun createMark(
+        projectId: Uuid,
+        title: String,
+        description: String
+    ): Uuid? {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun editMark(mark: Mark): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun deleteMark(id: Uuid, projectId: Uuid): Boolean {
+        TODO("Not yet implemented")
     }
 }

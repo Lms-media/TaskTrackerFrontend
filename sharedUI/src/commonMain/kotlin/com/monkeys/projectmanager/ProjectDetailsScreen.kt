@@ -23,11 +23,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.monkeys.projectmanager.models.Mark
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.*
 import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
+import kotlin.collections.emptyList
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
@@ -48,6 +50,7 @@ fun ProjectDetailsScreen(
     val tasks by remember(project) {
         derivedStateOf { project.tasks }
     }
+
     val hasActiveTask by remember(project) {
         derivedStateOf { tasks.any { it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT } }
     }
@@ -78,6 +81,17 @@ fun ProjectDetailsScreen(
     var createBlockTask by remember { mutableStateOf(false) }
 
     var showArchive by remember { mutableStateOf(false) }
+    var createMarkAlert by remember { mutableStateOf(false) }
+    var marks by remember { mutableStateOf<List<Mark>>(emptyList()) }
+
+    val refreshMarks = {
+        scope.launch {
+            marks = ApiAdapter.getMarks(project.id)
+        }
+    }
+    LaunchedEffect(project.id) {
+        refreshMarks()
+    }
 
     val closedTasks by remember(project) {
         derivedStateOf { project.tasks.filter { it.status == TaskStatus.CLOSED } }
@@ -182,7 +196,7 @@ fun ProjectDetailsScreen(
                     icon = Icons.Outlined.ChatBubbleOutline,
                     text = stringResource(Res.string.create_mark),
                     modifier = Modifier.weight(1f),
-                    onClick = { }
+                    onClick = { createMarkAlert = true }
                 )
                 ProjectActionButton(
                     icon = Icons.Default.Archive,
@@ -203,6 +217,44 @@ fun ProjectDetailsScreen(
                 )
             }
             Spacer(Modifier.height(16.dp))
+            // Секция с пометками
+            if (marks.isNotEmpty()) {
+                Text(
+                    text = stringResource(Res.string.marks),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = Color.DarkGray
+                )
+
+                marks.forEach { mark ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        shadowElevation = 2.dp
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = mark.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = Color(0xFF3B2D60)
+                            )
+                            if (mark.text.isNotBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = mark.text,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.Black
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
         }
 
         if (activeBlockTask != null) {
@@ -412,6 +464,18 @@ fun ProjectDetailsScreen(
             }
         )
     }
+
+    if (createMarkAlert)
+        CreateNoteAlert(
+            onDismiss = {createMarkAlert = false},
+            onConfirm = {title, description ->
+                scope.launch {
+                    ApiAdapter.createMark(project.id, title, description)
+                    refreshMarks()
+                    createMarkAlert = false
+                }
+            }
+        )
 }
 
 @Composable

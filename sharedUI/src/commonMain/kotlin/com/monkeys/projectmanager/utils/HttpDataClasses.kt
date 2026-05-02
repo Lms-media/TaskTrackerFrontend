@@ -59,10 +59,28 @@ data class NoteResponse(
 
 @Serializable
 @OptIn(ExperimentalUuidApi::class)
+data class MarkResponse(
+    val title: String,
+    val description: String
+)
+
+@Serializable
+@OptIn(ExperimentalUuidApi::class)
 data class NotesDto (
     val noteUuid: Uuid,
     val title: String,
     val content: String,
+    val createdAt: Long,
+    val deletedAt: Long? = null
+)
+
+@Serializable
+@OptIn(ExperimentalUuidApi::class)
+data class MarksDto (
+    val markUuid: Uuid,
+    val projectUuid: Uuid,
+    val title: String,
+    val description: String,
     val createdAt: Long,
     val deletedAt: Long? = null
 )

@@ -116,8 +116,6 @@ fun MainContent(
                             showGoTo(onClickGoTo)
                         }
                     }
-                    // if (activeTasks.isNotEmpty()) showTask(activeTasks.random())
-                    // else showGoTo(onClickGoTo)
                 }
 
                 ActionType.EDIT_LAST -> {
