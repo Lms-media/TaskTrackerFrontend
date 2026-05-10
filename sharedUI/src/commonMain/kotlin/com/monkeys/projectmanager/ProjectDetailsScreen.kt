@@ -1,7 +1,10 @@
 package com.monkeys.projectmanager
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Mark
 import com.monkeys.projectmanager.models.Project
+import com.monkeys.projectmanager.models.Task
 import com.monkeys.projectmanager.utils.*
 import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
@@ -43,6 +47,7 @@ fun ProjectDetailsScreen(
     clearShow: () -> Unit,
     showAllProjects: Boolean,
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    simpleMode: Boolean = false,
     onProjectChanged: suspend () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -52,7 +57,12 @@ fun ProjectDetailsScreen(
     }
 
     val hasActiveTask by remember(project) {
-        derivedStateOf { tasks.any { it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT } }
+        derivedStateOf {
+            tasks.any {
+                it.wave == WaveStatus.ACTIVE &&
+                        (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
+            }
+        }
     }
     val activeBlockTask by remember(project) {
         derivedStateOf {
@@ -78,6 +88,7 @@ fun ProjectDetailsScreen(
     }
 
     var createTask by remember { mutableStateOf(false) }
+    var chooseTask by remember { mutableStateOf(false) }
     var createBlockTask by remember { mutableStateOf(false) }
 
     var showArchive by remember { mutableStateOf(false) }
@@ -96,8 +107,62 @@ fun ProjectDetailsScreen(
     val closedTasks by remember(project) {
         derivedStateOf { project.tasks.filter { it.status == TaskStatus.CLOSED } }
     }
+    val selectableTasks by remember(project) {
+        derivedStateOf {
+            project.tasks
+                .filter {
+                    it.status != TaskStatus.CLOSED &&
+                            it.status != TaskStatus.BLOCKED &&
+                            it.wave == WaveStatus.BACKLOG
+                }
+                .sortedByDescending { it.createdDate }
+        }
+    }
 
     val scrollState = rememberScrollState()
+
+    suspend fun chooseTargetWave(): WaveStatus {
+        val allProjects = ApiAdapter.getProjects()
+        val allTasks = ApiAdapter.getTasks()
+        val offProjectsCount = allProjects.count { it.status == ProjectStatus.OFF }
+        val isWaveAlreadyActive = allTasks.any {
+            it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
+        }
+
+        val targetWave = if (!isWaveAlreadyActive && offProjectsCount <= 1) {
+            WaveStatus.ACTIVE
+        } else {
+            WaveStatus.WAITING
+        }
+
+        if (targetWave == WaveStatus.ACTIVE) {
+            allTasks
+                .filter {
+                    it.wave == WaveStatus.WAITING &&
+                            (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
+                }
+                .forEach { task ->
+                    task.wave = WaveStatus.ACTIVE
+                    ApiAdapter.editTask(task)
+                }
+        }
+
+        return targetWave
+    }
+
+    suspend fun finishTaskSelection() {
+        onProjectChanged()
+        if (showAllProjects) {
+            val nextProject = ApiAdapter.getProjects()
+                .find { it.status == ProjectStatus.OFF }
+            if (nextProject != null) {
+                onBack()
+                onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
+            } else {
+                clearShow()
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()){
         Column(
@@ -185,11 +250,11 @@ fun ProjectDetailsScreen(
             ) {
                 ProjectActionButton(
                     icon = Icons.Default.Add,
-                    text = stringResource(Res.string.create_task),
+                    text = "Выбрать задачу",
                     modifier = Modifier.weight(1f),
                     enabled = !hasActiveTask,
                     onClick = {
-                        createTask = true
+                        chooseTask = true
                     }
                 )
                 ProjectActionButton(
@@ -302,6 +367,32 @@ fun ProjectDetailsScreen(
         }
     }
 
+    if (chooseTask) {
+        ChooseProjectTaskAlert(
+            tasks = selectableTasks,
+            onDismiss = { chooseTask = false },
+            onCreateTask = {
+                chooseTask = false
+                createTask = true
+            },
+            onAddToWave = { task ->
+                scope.launch {
+                    val targetWave = chooseTargetWave()
+                    task.status = TaskStatus.ACTIVE
+                    task.wave = targetWave
+                    task.blockedUntil = Clock.System.now().toEpochMilliseconds()
+                    val taskUpdated = ApiAdapter.editTask(task)
+                    if (!taskUpdated) return@launch
+
+                    project.status = ProjectStatus.ON
+                    ApiAdapter.editProject(project)
+                    chooseTask = false
+                    finishTaskSelection()
+                }
+            }
+        )
+    }
+
     if (createTask) {
         CreateAlert(
             onClick = {
@@ -309,52 +400,17 @@ fun ProjectDetailsScreen(
             },
             onConfirm = {name, desc ->
                 scope.launch {
-                    val allProjects = ApiAdapter.getProjects()
-                    val allTasks = ApiAdapter.getTasks()
-                    val offProjectsCount = allProjects.count {
-                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
-                    }
-                    val isWaveAlreadyActive = allTasks.any {
-                        it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
-                    }
-
-                    val targetStatus = if (!isWaveAlreadyActive && offProjectsCount <= 1) {
-                        WaveStatus.ACTIVE
-                    } else {
-                        WaveStatus.WAITING
-                    }
-
-                    if (targetStatus == WaveStatus.ACTIVE) {
-                        for (index in allTasks.indices) {
-                            val task = allTasks[index]
-                            if (task.wave == WaveStatus.WAITING) {
-                                task.wave = targetStatus
-                                ApiAdapter.editTask(task)
-                            }
-                        }
-                    }
-
                     val createdTaskId = ApiAdapter.createTask(
                         project.id,
                         name,
                         desc,
                         TaskStatus.ACTIVE,
-                        targetStatus,
+                        WaveStatus.BACKLOG,
                         Clock.System.now().toEpochMilliseconds()
                     )
                     if (createdTaskId == null) return@launch
                     onProjectChanged()
-
-                    if (showAllProjects){
-                        val nextProject = ApiAdapter.getProjects()
-                            .find { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
-                        if (nextProject != null) {
-                            onBack()
-                            onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
-                        } else {
-                            clearShow()
-                        }
-                    }
+                    chooseTask = true
                     createTask = false
                 }
             },
@@ -369,22 +425,7 @@ fun ProjectDetailsScreen(
             },
             onConfirm = {name, description, date ->
                 scope.launch {
-                    val allTasks = ApiAdapter.getTasks()
-                    val offProjectsCount = ApiAdapter.getProjects().count {
-                        it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
-                    }
-                    val isWaveAlreadyActive = allTasks.any {
-                        it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
-                    }
-
-                    if (!isWaveAlreadyActive && offProjectsCount <= 1)
-                        for (index in allTasks.indices) {
-                            val task = allTasks[index]
-                            if (task.wave == WaveStatus.WAITING) {
-                                task.wave = WaveStatus.ACTIVE
-                                ApiAdapter.editTask(task)
-                            }
-                        }
+                    chooseTargetWave()
 
                     val blockTaskId = ApiAdapter.blockProject(
                         project.id,
@@ -476,6 +517,137 @@ fun ProjectDetailsScreen(
                 }
             }
         )
+}
+
+@OptIn(ExperimentalUuidApi::class)
+@Composable
+fun ChooseProjectTaskAlert(
+    tasks: List<Task>,
+    onDismiss: () -> Unit,
+    onCreateTask: () -> Unit,
+    onAddToWave: (Task) -> Unit
+) {
+    var selectedTask by remember(tasks) { mutableStateOf(tasks.firstOrNull()) }
+    var showConfirm by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        containerColor = Color.White,
+        title = { Text("Выбрать задачу") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onCreateTask,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF3B2D60),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(Res.string.create_task))
+                }
+
+                if (tasks.isEmpty()) {
+                    Text(
+                        text = "У проекта пока нет задач для выбора",
+                        color = Color.Gray,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(tasks, key = { it.id }) { task ->
+                            val selected = selectedTask?.id == task.id
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedTask = task },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (selected) Color(0xFFEDE7F6) else Color(0xFFF5F5F5)
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = task.title,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Color.Black
+                                    )
+                                    if (selected) {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            text = task.description,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.Black
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.cancel), color = Color(0xFF3B2D60))
+            }
+        },
+        dismissButton = {
+            IconButton(
+                onClick = { if (selectedTask != null) showConfirm = true },
+                enabled = selectedTask != null,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = Color(0xFF3B2D60),
+                    contentColor = Color.White,
+                    disabledContainerColor = Color(0xFFE9E9E9),
+                    disabledContentColor = Color.Gray
+                )
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+            }
+        }
+    )
+
+    if (showConfirm && selectedTask != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = Color.White,
+            title = { Text("Добавить задачу в волну?") },
+            text = {
+                Text(
+                    text = selectedTask!!.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.Black
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfirm = false
+                        onAddToWave(selectedTask!!)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B2D60))
+                ) {
+                    Text(stringResource(Res.string.ok), color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) {
+                    Text(stringResource(Res.string.cancel), color = Color(0xFF3B2D60))
+                }
+            }
+        )
+    }
 }
 
 @Composable

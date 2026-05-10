@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.*
@@ -29,6 +30,7 @@ import monkeys_pm.sharedui.generated.resources.create_project
 import monkeys_pm.sharedui.generated.resources.no_all_projects_full
 import monkeys_pm.sharedui.generated.resources.no_projects
 import org.jetbrains.compose.resources.stringResource
+import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -41,7 +43,10 @@ fun ProjectsScreen(
     refreshKey: Int,
     id: Uuid? = null,
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
-    onDataChanged: () -> Unit
+    onGoToTasks: () -> Unit,
+    showProjectListRequest: Int = 0,
+    onDataChanged: () -> Unit,
+    simpleMode: Boolean = false
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
@@ -57,16 +62,30 @@ fun ProjectsScreen(
 
     val hasOffProjects by remember(projects) {
         derivedStateOf {
-            projects.any { it.status == ProjectStatus.OFF
-                    || it.status == ProjectStatus.OFF_FROM_BLOCK
+            projects.any { it.status == ProjectStatus.OFF }
+        }
+    }
+    val visibleProjects by remember(projects, simpleMode) {
+        derivedStateOf {
+            if (!simpleMode) {
+                projects
+            } else {
+                val now = Clock.System.now().toEpochMilliseconds()
+                projects.filterNot { project ->
+                    project.status == ProjectStatus.OFF_FROM_BLOCK ||
+                            project.tasks.any {
+                                it.status == com.monkeys.projectmanager.utils.TaskStatus.BLOCKED &&
+                                        it.blockedUntil > now
+                            }
+                }
             }
         }
     }
-    val sortedProjects by remember(projects) {
+    val sortedProjects by remember(visibleProjects) {
         derivedStateOf {
-            projects.sortedWith(
+            visibleProjects.sortedWith(
                 compareBy<Project> {
-                    it.status != ProjectStatus.OFF && it.status != ProjectStatus.OFF_FROM_BLOCK
+                    it.status != ProjectStatus.OFF
                 }.thenByDescending { it.createdDate }
             )
         }
@@ -74,6 +93,14 @@ fun ProjectsScreen(
     LaunchedEffect(id) {
         if (id != null) {
             selectedProject = ApiAdapter.getProject(id)
+        }
+    }
+
+    LaunchedEffect(showProjectListRequest) {
+        if (showProjectListRequest > 0) {
+            selectedProject = null
+            clearId()
+            clearShow()
         }
     }
 
@@ -122,7 +149,7 @@ fun ProjectsScreen(
                             ) {
                                 items(
                                     sortedProjects,
-                                    key = { "${it.id}_${it.status}" }
+                                    key = { it.id }
                                 ) { project ->
                                     println("project title: ${project.name}")
                                     println("project status: ${project.status}")
@@ -162,6 +189,27 @@ fun ProjectsScreen(
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(Res.string.create_project))
                     }
+
+                    Button(
+                        onClick = onGoToTasks,
+                        enabled = !hasOffProjects,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(24.dp)
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF3B2D60),
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFF493D68),
+                            disabledContentColor = Color.LightGray
+                        ),
+                        shape = CircleShape,
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Перейти к разбору задач")
+                    }
                 }
             }
         } else ProjectDetailsScreen(
@@ -178,9 +226,15 @@ fun ProjectsScreen(
             clearShow = clearShow,
             showAllProjects = showAllProjects,
             onClickGoTo = onClickGoTo,
+            simpleMode = simpleMode,
             onProjectChanged = {
                 projects = ApiAdapter.getProjects()
-                selectedProject = ApiAdapter.getProject(currentProject.id)
+                val updatedProject = ApiAdapter.getProject(currentProject.id)
+                selectedProject = if (simpleMode && updatedProject?.status != ProjectStatus.OFF) {
+                    projects.firstOrNull { it.status == ProjectStatus.OFF }
+                } else {
+                    updatedProject
+                }
                 onDataChanged()
             }
         )
@@ -218,11 +272,8 @@ fun ProjectItemRow(
                 .fillMaxWidth()
                 .clickable { onClick() }
                 .background(
-                    if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK)
-                        && hasOffProjects
-                    ) Color(
-                        0xFFFFEBEE
-                    )
+                    if (project.status == ProjectStatus.OFF && hasOffProjects) Color(0xFFFFEBEE)
+                    else if (project.status == ProjectStatus.OFF_FROM_BLOCK) Color(0xFFFFF8E1)
                     else Color(0xFFE8F5E9)
                 )
                 .padding(vertical = 24.dp, horizontal = 20.dp),
@@ -238,16 +289,14 @@ fun ProjectItemRow(
                 color = Color.Black
             )
 
-            if ((project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK) && hasOffProjects) {
-                if (project.status == ProjectStatus.OFF_FROM_BLOCK && hasOffProjects) {
-                    Icon(
-                        imageVector = Icons.Default.HourglassEmpty,
-                        contentDescription = null,
-                        tint = Color(0xFF3B2D60),
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                }
+            if (project.status == ProjectStatus.OFF_FROM_BLOCK) {
+                Icon(
+                    imageVector = Icons.Default.HourglassEmpty,
+                    contentDescription = null,
+                    tint = Color(0xFF3B2D60),
+                    modifier = Modifier.size(32.dp)
+                )
+            } else if (project.status == ProjectStatus.OFF && hasOffProjects) {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,

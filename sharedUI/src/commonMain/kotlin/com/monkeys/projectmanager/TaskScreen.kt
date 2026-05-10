@@ -184,7 +184,7 @@ fun showGoTo(
 
     LaunchedEffect(Unit) {
         offProjectIds = ApiAdapter.getProjects()
-            .filter { it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK }
+            .filter { it.status == ProjectStatus.OFF }
             .map { it.id }
     }
 
@@ -237,6 +237,55 @@ fun showGoTo(
                         maxLines = 1)
                 }
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalUuidApi::class)
+@Composable
+fun showGoToNotes(
+    onClickGoToNotes: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFFFAFAFA)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(16.dp)
+                .background(Color(0xFFFAFAFA)),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Сначала разберите заметки",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color(0xFFA9A9A9),
+                    maxLines = 1
+                )
+            }
+            ElevatedButton(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .height(50.dp)
+                    .fillMaxWidth(),
+                onClick = onClickGoToNotes,
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = Color(0xFF3B2D60),
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(Icons.Default.Folder, contentDescription = null)
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Перейти к заметкам", maxLines = 1)
+            }
         }
     }
 }

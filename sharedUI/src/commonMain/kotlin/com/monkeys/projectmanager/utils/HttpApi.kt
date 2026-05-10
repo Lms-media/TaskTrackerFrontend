@@ -11,6 +11,7 @@ import kotlin.uuid.Uuid
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -54,9 +55,11 @@ object HttpApi : IApi {
         password = "Frontend123!"
     )
     private var accessToken: String? = null
+    private var accessTokenExpiresAt: Long = 0L
     private val authMutex = Mutex()
 
     private val client = HttpClient {
+        expectSuccess = true
         install(ContentNegotiation) {
             json(
                 Json {
@@ -110,6 +113,17 @@ object HttpApi : IApi {
         return this.accessToken ?: error("Auth response does not contain accessToken")
     }
 
+    private fun isAccessTokenFresh(): Boolean {
+        val refreshSkewMillis = 60_000L
+        return accessToken != null &&
+                accessTokenExpiresAt - refreshSkewMillis > Clock.System.now().toEpochMilliseconds()
+    }
+
+    private fun clearAuthorization() {
+        accessToken = null
+        accessTokenExpiresAt = 0L
+    }
+
     private suspend fun login(): String {
         val response: AuthResponse = client.post(apiUrl(loginUrl)) {
             contentType(KtorContentType.Application.Json)
@@ -121,6 +135,8 @@ object HttpApi : IApi {
             )
         }.body()
 
+        accessTokenExpiresAt = response.accessTokenExpiresAt
+            ?: (Clock.System.now().toEpochMilliseconds() + 10 * 60_000L)
         return response.bearerToken()
     }
 
@@ -132,10 +148,10 @@ object HttpApi : IApi {
     }
 
     private suspend fun ensureAuthorized() {
-        if (accessToken != null) return
+        if (isAccessTokenFresh()) return
 
         authMutex.withLock {
-            if (accessToken != null) return
+            if (isAccessTokenFresh()) return
 
             accessToken = runCatching {
                 login()
@@ -151,25 +167,22 @@ object HttpApi : IApi {
         return "Bearer ${accessToken.orEmpty()}"
     }
 
+    private suspend fun <T> withAuthorizedRetry(block: suspend (String) -> T): T {
+        return try {
+            block(bearerHeader())
+        } catch (error: ResponseException) {
+            if (error.response.status != HttpStatusCode.Unauthorized) throw error
+            clearAuthorization()
+            block(bearerHeader())
+        }
+    }
+
     suspend fun updateProjectsAndTasks() {
         val now = Clock.System.now().toEpochMilliseconds()
-        val responseProjects: List<ProjectDto> = client.get(apiUrl(projectUrl)) {
-            header(HttpHeaders.Authorization, bearerHeader())
-        }.body()
-        val responseTasks: List<TaskDto> = client.get(apiUrl(tasksUrl)) {
-            header(HttpHeaders.Authorization, bearerHeader())
-        }.body()
-        val loadedTasks = responseTasks.map { responseTask ->
-            Task(
-                responseTask.taskUuid,
-                responseTask.projectUuid,
-                responseTask.title,
-                responseTask.description,
-                responseTask.status.toFrontendTaskStatus(),
-                WaveStatus.entries.getOrElse(responseTask.wave) { WaveStatus.WAITING },
-                responseTask.createdAt,
-                responseTask.blockedUntil ?: 0L
-            )
+        val responseProjects: List<ProjectDto> = withAuthorizedRetry { auth ->
+            client.get(apiUrl(projectUrl)) {
+                header(HttpHeaders.Authorization, auth)
+            }.body()
         }
         val loadedProjects = responseProjects
             .filter { dto ->
@@ -177,11 +190,27 @@ object HttpApi : IApi {
                         dto.status != BackendProjectStatus.DELETED
             }
             .map { dto ->
-            val parsedTasks = loadedTasks.filter { it.projectId == dto.projectUuid }
+            val responseTasks: List<TaskDto> = withAuthorizedRetry { auth ->
+                client.get(apiUrl("api/projects/${dto.projectUuid}/tasks")) {
+                    header(HttpHeaders.Authorization, auth)
+                }.body()
+            }
+            val parsedTasks = responseTasks.map { responseTask ->
+                Task(
+                    responseTask.taskUuid,
+                    responseTask.projectUuid,
+                    responseTask.title,
+                    responseTask.description,
+                    responseTask.status.toFrontendTaskStatus(),
+                    WaveStatus.entries.getOrElse(responseTask.wave) { WaveStatus.BACKLOG },
+                    responseTask.createdAt,
+                    responseTask.blockedUntil ?: 0L
+                )
+            }
             val projectStatus = if (parsedTasks.any {
                     it.status == TaskStatus.BLOCKED && it.blockedUntil > now
                 }) {
-                ProjectStatus.ON
+                ProjectStatus.OFF_FROM_BLOCK
             } else {
                 dto.status.toFrontendProjectStatus()
             }
@@ -198,17 +227,19 @@ object HttpApi : IApi {
 
         projects.clear()
         tasks.clear()
-        tasks.addAll(loadedTasks)
 
         loadedProjects.forEach { project ->
             projects.add(project)
+            tasks.addAll(project.tasks)
         }
     }
 
     suspend fun updateNotes() {
-        val responseNotes: List<NotesDto> = client.get(apiUrl(notesUrl)) {
-            header(HttpHeaders.Authorization, bearerHeader())
-        }.body()
+        val responseNotes: List<NotesDto> = withAuthorizedRetry { auth ->
+            client.get(apiUrl(notesUrl)) {
+                header(HttpHeaders.Authorization, auth)
+            }.body()
+        }
         val loadedNotes = responseNotes.map { dto ->
             Note(
                 dto.noteUuid,
@@ -238,9 +269,11 @@ object HttpApi : IApi {
     fun getMarksUrl(projectId: Uuid): String = "/api/projects/$projectId/marks"
     override suspend fun getMarks(projectId: Uuid): List<Mark> {
         val marks = mutableStateListOf<Mark>()
-        val responseMarks: List<MarksDto> = client.get(apiUrl(getMarksUrl(projectId))) {
-            header(HttpHeaders.Authorization, bearerHeader())
-        }.body()
+        val responseMarks: List<MarksDto> = withAuthorizedRetry { auth ->
+            client.get(apiUrl(getMarksUrl(projectId))) {
+                header(HttpHeaders.Authorization, auth)
+            }.body()
+        }
         val loadedNotes = responseMarks.map { dto ->
             Mark(
                 dto.markUuid,
@@ -257,11 +290,13 @@ object HttpApi : IApi {
 
     override suspend fun createProject(name: String, description: String): Uuid {
         val projectResponse = ProjectFullResponse(name, description, ProjectStatus.OFF.toBackendProjectStatus())
-        val responseProject: ProjectDto = client.post(apiUrl(projectUrl)) {
-            header(HttpHeaders.Authorization, bearerHeader())
-            contentType(KtorContentType.Application.Json)
-            setBody(projectResponse)
-        }.body()
+        val responseProject: ProjectDto = withAuthorizedRetry { auth ->
+            client.post(apiUrl(projectUrl)) {
+                header(HttpHeaders.Authorization, auth)
+                contentType(KtorContentType.Application.Json)
+                setBody(projectResponse)
+            }.body()
+        }
         val id = responseProject.projectUuid
         updateProjectsAndTasks()
         return id
@@ -281,11 +316,13 @@ object HttpApi : IApi {
                 project.description,
                 project.status.toBackendProjectStatus()
             )
-            client.request(request) {
-                method = HttpMethod.Patch
-                header(HttpHeaders.Authorization, bearerHeader())
-                contentType(KtorContentType.Application.Json)
-                setBody(requestProject)
+            withAuthorizedRetry { auth ->
+                client.request(request) {
+                    method = HttpMethod.Patch
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(KtorContentType.Application.Json)
+                    setBody(requestProject)
+                }
             }
             updateProjectsAndTasks()
             true
@@ -303,9 +340,11 @@ object HttpApi : IApi {
                 closeTask(task.id)
             }
             val request = apiUrl("$projectUrl/$id/close")
-            client.request(request) {
-                method = HttpMethod.Patch
-                header(HttpHeaders.Authorization, bearerHeader())
+            withAuthorizedRetry { auth ->
+                client.request(request) {
+                    method = HttpMethod.Patch
+                    header(HttpHeaders.Authorization, auth)
+                }
             }
             updateProjectsAndTasks()
             true
@@ -325,7 +364,10 @@ object HttpApi : IApi {
         if (index == -1) return null
 
         val project = projects[index]
-        if (project.status == ProjectStatus.OFF || project.status == ProjectStatus.OFF_FROM_BLOCK) {
+        if (wave == WaveStatus.BACKLOG ||
+            project.status == ProjectStatus.OFF ||
+            project.status == ProjectStatus.OFF_FROM_BLOCK
+        ) {
             val task = TaskFullResponse(
                 title,
                 description,
@@ -334,26 +376,32 @@ object HttpApi : IApi {
                 blockedUntil.takeIf { status == TaskStatus.BLOCKED }
             )
             val request = apiUrl("api/projects/$projectId/tasks")
-            val responseTask: TaskDto = client.post(request) {
-                header(HttpHeaders.Authorization, bearerHeader())
-                contentType(KtorContentType.Application.Json)
-                setBody(task)
-            }.body()
+            val responseTask: TaskDto = withAuthorizedRetry { auth ->
+                client.post(request) {
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(KtorContentType.Application.Json)
+                    setBody(task)
+                }.body()
+            }
             val taskId = responseTask.taskUuid
-            val projectRequest = ProjectFullResponse(
-                project.name,
-                project.description,
-                if (status == TaskStatus.BLOCKED) {
-                    ProjectStatus.OFF_FROM_BLOCK.toBackendProjectStatus()
-                } else {
-                    ProjectStatus.ON.toBackendProjectStatus()
+            if (wave != WaveStatus.BACKLOG) {
+                val projectRequest = ProjectFullResponse(
+                    project.name,
+                    project.description,
+                    if (status == TaskStatus.BLOCKED) {
+                        ProjectStatus.OFF_FROM_BLOCK.toBackendProjectStatus()
+                    } else {
+                        ProjectStatus.ON.toBackendProjectStatus()
+                    }
+                )
+                withAuthorizedRetry { auth ->
+                    client.request(apiUrl("$projectUrl/$projectId")) {
+                        method = HttpMethod.Patch
+                        header(HttpHeaders.Authorization, auth)
+                        contentType(KtorContentType.Application.Json)
+                        setBody(projectRequest)
+                    }
                 }
-            )
-            client.request(apiUrl("$projectUrl/$projectId")) {
-                method = HttpMethod.Patch
-                header(HttpHeaders.Authorization, bearerHeader())
-                contentType(KtorContentType.Application.Json)
-                setBody(projectRequest)
             }
             updateProjectsAndTasks()
             return taskId
@@ -372,11 +420,13 @@ object HttpApi : IApi {
                 task.blockedUntil.takeIf { task.status == TaskStatus.BLOCKED }
             )
             val request = apiUrl("$tasksUrl/${task.id}")
-            client.request(request) {
-                method = HttpMethod.Patch
-                header(HttpHeaders.Authorization, bearerHeader())
-                contentType(KtorContentType.Application.Json)
-                setBody(requestTask)
+            withAuthorizedRetry { auth ->
+                client.request(request) {
+                    method = HttpMethod.Patch
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(KtorContentType.Application.Json)
+                    setBody(requestTask)
+                }
             }
             updateProjectsAndTasks()
             true
@@ -405,17 +455,21 @@ object HttpApi : IApi {
                 projectNewStatus.toBackendProjectStatus(),
             )
             val requestProject = apiUrl("$projectUrl/${projects[projIndex].id}")
-            client.request(requestProject) {
-                method = HttpMethod.Patch
-                header(HttpHeaders.Authorization, bearerHeader())
-                contentType(KtorContentType.Application.Json)
-                setBody(projectRequest)
+            withAuthorizedRetry { auth ->
+                client.request(requestProject) {
+                    method = HttpMethod.Patch
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(KtorContentType.Application.Json)
+                    setBody(projectRequest)
+                }
             }
 
             task.status = TaskStatus.CLOSED
             val request = apiUrl("$tasksUrl/${task.id}")
-            client.post("$request/close") {
-                header(HttpHeaders.Authorization, bearerHeader())
+            withAuthorizedRetry { auth ->
+                client.post("$request/close") {
+                    header(HttpHeaders.Authorization, auth)
+                }
             }
             updateProjectsAndTasks()
             true
@@ -428,11 +482,13 @@ object HttpApi : IApi {
             title,
             text,
         )
-        val outputNote: NotesDto = client.post(request) {
-            header(HttpHeaders.Authorization, bearerHeader())
-            contentType(KtorContentType.Application.Json)
-            setBody(noteRequest)
-        }.body()
+        val outputNote: NotesDto = withAuthorizedRetry { auth ->
+            client.post(request) {
+                header(HttpHeaders.Authorization, auth)
+                contentType(KtorContentType.Application.Json)
+                setBody(noteRequest)
+            }.body()
+        }
         updateNotes()
         return outputNote.noteUuid
     }
@@ -445,11 +501,13 @@ object HttpApi : IApi {
                 note.title,
                 note.text,
             )
-            client.request(request) {
-                method = HttpMethod.Patch
-                header(HttpHeaders.Authorization, bearerHeader())
-                contentType(KtorContentType.Application.Json)
-                setBody(noteRequest)
+            withAuthorizedRetry { auth ->
+                client.request(request) {
+                    method = HttpMethod.Patch
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(KtorContentType.Application.Json)
+                    setBody(noteRequest)
+                }
             }
             updateNotes()
             true
@@ -460,9 +518,11 @@ object HttpApi : IApi {
         val index = notes.indexOfFirst { it.id == id }
         return if (index != -1) {
             val request = apiUrl("$notesUrl/$id")
-            client.request(request) {
-                method = HttpMethod.Delete
-                header(HttpHeaders.Authorization, bearerHeader())
+            withAuthorizedRetry { auth ->
+                client.request(request) {
+                    method = HttpMethod.Delete
+                    header(HttpHeaders.Authorization, auth)
+                }
             }
             updateNotes()
             true
@@ -479,11 +539,13 @@ object HttpApi : IApi {
             title,
             description,
         )
-        val outputMark: MarksDto = client.post(request) {
-            header(HttpHeaders.Authorization, bearerHeader())
-            contentType(KtorContentType.Application.Json)
-            setBody(markRequest)
-        }.body()
+        val outputMark: MarksDto = withAuthorizedRetry { auth ->
+            client.post(request) {
+                header(HttpHeaders.Authorization, auth)
+                contentType(KtorContentType.Application.Json)
+                setBody(markRequest)
+            }.body()
+        }
         return outputMark.markUuid
     }
 
@@ -493,11 +555,13 @@ object HttpApi : IApi {
             mark.title,
             mark.text,
         )
-        val response = client.request(request) {
-            method = HttpMethod.Patch
-            header(HttpHeaders.Authorization, bearerHeader())
-            contentType(KtorContentType.Application.Json)
-            setBody(markRequest)
+        val response = withAuthorizedRetry { auth ->
+            client.request(request) {
+                method = HttpMethod.Patch
+                header(HttpHeaders.Authorization, auth)
+                contentType(KtorContentType.Application.Json)
+                setBody(markRequest)
+            }
         }
         updateNotes()
         return response.status == HttpStatusCode.OK
@@ -505,9 +569,11 @@ object HttpApi : IApi {
 
     override suspend fun deleteMark(id: Uuid, projectId: Uuid): Boolean {
         val request = apiUrl("${getMarksUrl(projectId)}/$id")
-        val response = client.request(request) {
-            method = HttpMethod.Delete
-            header(HttpHeaders.Authorization, bearerHeader())
+        val response = withAuthorizedRetry { auth ->
+            client.request(request) {
+                method = HttpMethod.Delete
+                header(HttpHeaders.Authorization, auth)
+            }
         }
         return response.status == HttpStatusCode.OK
     }

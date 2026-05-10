@@ -43,6 +43,7 @@ fun SideNavigationDrawer(
     onItemClick: (ActionType, Uuid?) -> Unit,
     onTabClick: (ActionType) -> Unit,
     onToggle: () -> Unit,
+    onSwitchToSimple: () -> Unit,
     onDataChanged: () -> Unit
 ) {
     var currentTime by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
@@ -118,7 +119,7 @@ fun SideNavigationDrawer(
             }
             val hasOffProjects by remember {
                 derivedStateOf { projects.any {
-                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
+                    it.status == ProjectStatus.OFF
                 } }
             }
             val canEditNote by remember {
@@ -138,6 +139,7 @@ fun SideNavigationDrawer(
                 if (canEditNote)
                     add(NavigationItem(ActionType.EDIT_LAST, stringResource(Res.string.edit), Icons.Default.Edit))
                 add(NavigationItem(ActionType.THINK, stringResource(Res.string.think), Icons.Default.Lightbulb))
+                add(NavigationItem(ActionType.MORNING, "Утренний разбор", Icons.Default.QueryStats))
             }
 
             items.forEach { item ->
@@ -217,7 +219,19 @@ fun SideNavigationDrawer(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.weight(1f))
+
+            ModeHoldButton(
+                icon = Icons.Default.Face,
+                title = "Обезьяна",
+                isExpanded = isExpanded,
+                onSwitch = onSwitchToSimple,
+                modifier = Modifier
+                    .padding(top = 4.dp, bottom = 12.dp, end = 8.dp)
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(bottomEnd = 100.dp, topEnd = 100.dp))
+            )
         }
     }
 
