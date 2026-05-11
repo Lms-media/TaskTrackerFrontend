@@ -25,6 +25,14 @@ data class ProjectDto(
     val deletedAt: Long? = null
 )
 
+@OptIn(ExperimentalUuidApi::class)
+data class ProjectHistoryItem(
+    val projectUuid: Uuid,
+    val createdAt: Long,
+    val closedAt: Long?,
+    val deletedAt: Long?
+)
+
 @Serializable
 @OptIn(ExperimentalUuidApi::class)
 data class TaskFullResponse(

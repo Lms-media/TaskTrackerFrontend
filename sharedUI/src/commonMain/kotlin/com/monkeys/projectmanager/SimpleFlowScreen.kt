@@ -35,10 +35,12 @@ import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.models.Task
 import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
-import com.monkeys.projectmanager.utils.ProjectStatus
 import com.monkeys.projectmanager.utils.TaskStatus
 import com.monkeys.projectmanager.utils.WaveStatus
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -65,6 +67,8 @@ fun SimpleFlowScreen(
     var noteToEdit by remember { mutableStateOf<Note?>(null) }
     var returnStepAfterEdit by remember { mutableStateOf(SimpleStep.TASKS) }
     var showProjectListRequest by remember { mutableStateOf(0) }
+    var now by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
+    var projectIdToOpen by remember { mutableStateOf<Uuid?>(null) }
 
     suspend fun reload() {
         tasks = ApiAdapter.getTasks()
@@ -85,17 +89,32 @@ fun SimpleFlowScreen(
         }
     }
     val hasInbox by remember(notes) { derivedStateOf { notes.isNotEmpty() } }
-    val hasProjectsToPrepare by remember(projects) {
-        derivedStateOf { projects.any { it.status == ProjectStatus.OFF } }
+    val hasProjectsToPrepare by remember(projects, now) {
+        derivedStateOf {
+            projects.any { it.needsTaskSelection(now) }
+        }
     }
-    val firstProjectToPrepare = remember(projects) {
-        projects.firstOrNull { it.status == ProjectStatus.OFF }?.id
+    val firstProjectToPrepare = remember(projects, now) {
+        projects.firstOrNull { it.needsTaskSelection(now) }?.id
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Clock.System.now().toEpochMilliseconds()
+            delay(1_000L.milliseconds)
+        }
     }
 
     LaunchedEffect(refreshKey) {
         reload()
         if (step == SimpleStep.NOTES && notes.isEmpty()) {
-            step = if (activeTasks.isNotEmpty()) SimpleStep.TASKS else SimpleStep.PROJECTS
+            if (activeTasks.isNotEmpty()) {
+                step = SimpleStep.TASKS
+            } else {
+                val currentTime = Clock.System.now().toEpochMilliseconds()
+                projectIdToOpen = projects.firstOrNull { it.needsTaskSelection(currentTime) }?.id
+                step = SimpleStep.PROJECTS
+            }
         }
     }
 
@@ -113,7 +132,10 @@ fun SimpleFlowScreen(
                     noteToEdit = notes.maxByOrNull { it.createdDate }
                     step = SimpleStep.EDIT_NOTE
                 },
-                onShowProjectList = { showProjectListRequest += 1 },
+                onShowProjectList = {
+                    projectIdToOpen = null
+                    showProjectListRequest += 1
+                },
                 onMorningReview = { step = SimpleStep.MORNING },
                 onSwitchToAdvanced = onSwitchToAdvanced
             )
@@ -144,7 +166,10 @@ fun SimpleFlowScreen(
                             hasInbox = hasInbox,
                             hasProjectsToPrepare = hasProjectsToPrepare,
                             onGoToInbox = { step = SimpleStep.NOTES },
-                            onGoToProjects = { step = SimpleStep.PROJECTS }
+                            onGoToProjects = {
+                                projectIdToOpen = firstProjectToPrepare
+                                step = SimpleStep.PROJECTS
+                            }
                         )
                     }
                 }
@@ -156,7 +181,10 @@ fun SimpleFlowScreen(
                                 reload()
                             }
                         },
-                        onGoToProjects = { step = SimpleStep.PROJECTS },
+                        onGoToProjects = {
+                            projectIdToOpen = firstProjectToPrepare
+                            step = SimpleStep.PROJECTS
+                        },
                         refreshKey = refreshKey,
                         onDataChanged = {
                             scope.launch {
@@ -174,7 +202,7 @@ fun SimpleFlowScreen(
                         clearShow = {},
                         showAllProjects = false,
                         refreshKey = refreshKey,
-                        id = firstProjectToPrepare,
+                        id = projectIdToOpen,
                         onClickGoTo = { _, _, _ -> },
                         onGoToTasks = {
                             step = if (notes.isNotEmpty()) SimpleStep.NOTES else SimpleStep.TASKS
@@ -208,7 +236,10 @@ fun SimpleFlowScreen(
                 }
 
                 SimpleStep.MORNING -> {
-                    MorningReviewScreen(refreshKey = refreshKey)
+                    MorningReviewScreen(
+                        refreshKey = refreshKey,
+                        onGoToTasks = { step = SimpleStep.TASKS }
+                    )
                 }
             }
         }
@@ -604,7 +635,7 @@ private fun SimpleTasksGateScreen(
 
         Button(
             onClick = onGoToProjects,
-            enabled = hasProjectsToPrepare,
+            enabled = true,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = CircleShape,
             colors = ButtonDefaults.buttonColors(

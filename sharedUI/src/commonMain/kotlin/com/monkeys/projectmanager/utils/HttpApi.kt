@@ -234,6 +234,22 @@ object HttpApi : IApi {
         }
     }
 
+    suspend fun getProjectHistory(): List<ProjectHistoryItem> {
+        val responseProjects: List<ProjectDto> = withAuthorizedRetry { auth ->
+            client.get(apiUrl(projectUrl)) {
+                header(HttpHeaders.Authorization, auth)
+            }.body()
+        }
+        return responseProjects.map { dto ->
+            ProjectHistoryItem(
+                projectUuid = dto.projectUuid,
+                createdAt = dto.createdAt,
+                closedAt = dto.closedAt,
+                deletedAt = dto.deletedAt
+            )
+        }
+    }
+
     suspend fun updateNotes() {
         val responseNotes: List<NotesDto> = withAuthorizedRetry { auth ->
             client.get(apiUrl(notesUrl)) {

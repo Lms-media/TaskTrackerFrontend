@@ -26,6 +26,25 @@ object ApiAdapter: IApi {
         emptyList()
     }
 
+    suspend fun getProjectHistory(): List<ProjectHistoryItem> = runCatching {
+        when (api) {
+            is HttpApi -> api.getProjectHistory()
+            else -> api.getProjects().map {
+                ProjectHistoryItem(
+                    projectUuid = it.id,
+                    createdAt = it.createdDate,
+                    closedAt = null,
+                    deletedAt = null
+                )
+            }
+        }
+    }.getOrElse {
+        if (!it.isExpectedCancellation()) {
+            println("getProjectHistory failed: ${it.message}")
+        }
+        emptyList()
+    }
+
     override suspend fun getTasks(): List<Task> = runCatching {
         api.getTasks()
     }.getOrElse {

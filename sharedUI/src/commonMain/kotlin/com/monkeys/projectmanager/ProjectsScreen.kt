@@ -24,6 +24,7 @@ import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
 import com.monkeys.projectmanager.utils.ProjectStatus
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.Res
 import monkeys_pm.sharedui.generated.resources.create_project
@@ -31,6 +32,7 @@ import monkeys_pm.sharedui.generated.resources.no_all_projects_full
 import monkeys_pm.sharedui.generated.resources.no_projects
 import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -51,6 +53,7 @@ fun ProjectsScreen(
     var showDialog by remember { mutableStateOf(false) }
     var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
     var selectedProject by remember { mutableStateOf<Project?>(null) }
+    var now by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(refreshKey) {
@@ -60,32 +63,37 @@ fun ProjectsScreen(
         }
     }
 
-    val hasOffProjects by remember(projects) {
-        derivedStateOf {
-            projects.any { it.status == ProjectStatus.OFF }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Clock.System.now().toEpochMilliseconds()
+            delay(1_000L.milliseconds)
         }
     }
-    val visibleProjects by remember(projects, simpleMode) {
+
+    val hasProjectsToPlan by remember(projects, now) {
         derivedStateOf {
-            if (!simpleMode) {
-                projects
+            projects.any { it.needsTaskSelection(now) }
+        }
+    }
+    val hasProjectsBlockingTaskReview by remember(projects, now) {
+        derivedStateOf {
+            projects.any { it.blocksTaskReview(now) }
+        }
+    }
+    val visibleProjects by remember(projects, simpleMode, now) {
+        derivedStateOf {
+            if (simpleMode) {
+                projects.filterNot { it.hasActiveBlock(now) }
             } else {
-                val now = Clock.System.now().toEpochMilliseconds()
-                projects.filterNot { project ->
-                    project.status == ProjectStatus.OFF_FROM_BLOCK ||
-                            project.tasks.any {
-                                it.status == com.monkeys.projectmanager.utils.TaskStatus.BLOCKED &&
-                                        it.blockedUntil > now
-                            }
-                }
+                projects
             }
         }
     }
-    val sortedProjects by remember(visibleProjects) {
+    val sortedProjects by remember(visibleProjects, now) {
         derivedStateOf {
             visibleProjects.sortedWith(
                 compareBy<Project> {
-                    it.status != ProjectStatus.OFF
+                    !it.needsTaskSelection(now)
                 }.thenByDescending { it.createdDate }
             )
         }
@@ -127,7 +135,7 @@ fun ProjectsScreen(
                 Box(modifier = Modifier.weight(1f)) {
                     if (sortedProjects.isNotEmpty()) {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            if (hasOffProjects) {
+                            if (hasProjectsToPlan) {
                                 Text(
                                     text = stringResource(Res.string.no_all_projects_full),
                                     color = Color.Red,
@@ -156,7 +164,7 @@ fun ProjectsScreen(
 
                                     ProjectItemRow(
                                         project,
-                                        hasOffProjects = hasOffProjects,
+                                        now = now,
                                         onClick = { selectedProject = project }
                                     )
                                 }
@@ -192,7 +200,7 @@ fun ProjectsScreen(
 
                     Button(
                         onClick = onGoToTasks,
-                        enabled = !hasOffProjects,
+                        enabled = !hasProjectsBlockingTaskReview,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(24.dp)
@@ -230,8 +238,9 @@ fun ProjectsScreen(
             onProjectChanged = {
                 projects = ApiAdapter.getProjects()
                 val updatedProject = ApiAdapter.getProject(currentProject.id)
-                selectedProject = if (simpleMode && updatedProject?.status != ProjectStatus.OFF) {
-                    projects.firstOrNull { it.status == ProjectStatus.OFF }
+                val now = Clock.System.now().toEpochMilliseconds()
+                selectedProject = if (simpleMode && updatedProject?.needsTaskSelection(now) != true) {
+                    projects.firstOrNull { it.needsTaskSelection(now) }
                 } else {
                     updatedProject
                 }
@@ -261,9 +270,12 @@ fun ProjectsScreen(
 @Composable
 fun ProjectItemRow(
     project: Project,
-    hasOffProjects: Boolean,
+    now: Long = Clock.System.now().toEpochMilliseconds(),
     onClick: () -> Unit
 ) {
+    val isActiveBlock = project.hasActiveBlock(now)
+    val isUnlockedFromBlock = project.isUnlockedFromBlock(now)
+    val needsTaskSelection = project.needsTaskSelection(now)
     println("project title in item: ${project.name}")
     println("project status in item: ${project.status}")
     Column {
@@ -272,8 +284,8 @@ fun ProjectItemRow(
                 .fillMaxWidth()
                 .clickable { onClick() }
                 .background(
-                    if (project.status == ProjectStatus.OFF && hasOffProjects) Color(0xFFFFEBEE)
-                    else if (project.status == ProjectStatus.OFF_FROM_BLOCK) Color(0xFFFFF8E1)
+                    if (needsTaskSelection) Color(0xFFFFEBEE)
+                    else if (project.status == ProjectStatus.OFF_FROM_BLOCK && isActiveBlock) Color(0xFFFFF8E1)
                     else Color(0xFFE8F5E9)
                 )
                 .padding(vertical = 24.dp, horizontal = 20.dp),
@@ -289,14 +301,14 @@ fun ProjectItemRow(
                 color = Color.Black
             )
 
-            if (project.status == ProjectStatus.OFF_FROM_BLOCK) {
+            if ((project.status == ProjectStatus.OFF_FROM_BLOCK && isActiveBlock) || isUnlockedFromBlock) {
                 Icon(
                     imageVector = Icons.Default.HourglassEmpty,
                     contentDescription = null,
                     tint = Color(0xFF3B2D60),
                     modifier = Modifier.size(32.dp)
                 )
-            } else if (project.status == ProjectStatus.OFF && hasOffProjects) {
+            } else if (needsTaskSelection) {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,

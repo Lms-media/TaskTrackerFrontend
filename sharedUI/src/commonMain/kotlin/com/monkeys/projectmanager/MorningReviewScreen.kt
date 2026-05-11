@@ -6,6 +6,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,8 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.utils.ApiAdapter
+import com.monkeys.projectmanager.utils.ProjectHistoryItem
 import com.monkeys.projectmanager.utils.timeZone
 import kotlin.math.max
 import kotlin.time.Clock
@@ -36,12 +41,13 @@ private data class ChartPoint(
 @Composable
 fun MorningReviewScreen(
     refreshKey: Int,
+    onGoToTasks: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
+    var projects by remember { mutableStateOf<List<ProjectHistoryItem>>(emptyList()) }
 
     LaunchedEffect(refreshKey) {
-        projects = ApiAdapter.getProjects()
+        projects = ApiAdapter.getProjectHistory()
     }
 
     val days = remember {
@@ -51,9 +57,14 @@ fun MorningReviewScreen(
     val openProjectPoints = remember(projects, days) {
         val today = todayDayIndex()
         days.map { day ->
+            val dayEnd = endOfDay(day)
             ChartPoint(
                 label = relativeDayLabel(today - day),
-                value = projects.count { it.createdDate <= endOfDay(day) }.toFloat()
+                value = projects.count { project ->
+                    project.createdAt <= dayEnd &&
+                            (project.closedAt == null || project.closedAt > dayEnd) &&
+                            (project.deletedAt == null || project.deletedAt > dayEnd)
+                }.toFloat()
             )
         }
     }
@@ -78,6 +89,20 @@ fun MorningReviewScreen(
             points = openProjectPoints,
             valueFormatter = { it.toInt().toString() }
         )
+
+        Button(
+            onClick = onGoToTasks,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF3B2D60),
+                contentColor = Color.White
+            )
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Вернуться к разбору задач")
+        }
     }
 }
 

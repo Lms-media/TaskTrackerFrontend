@@ -117,10 +117,10 @@ fun SideNavigationDrawer(
             val notesNotEmpty by remember {
                 derivedStateOf { notes.isNotEmpty() }
             }
-            val hasOffProjects by remember {
-                derivedStateOf { projects.any {
-                    it.status == ProjectStatus.OFF
-                } }
+            val hasOffProjects by remember(projects, currentTime) {
+                derivedStateOf {
+                    projects.any { it.needsTaskSelection(currentTime) }
+                }
             }
             val canEditNote by remember {
                 derivedStateOf {
@@ -139,7 +139,6 @@ fun SideNavigationDrawer(
                 if (canEditNote)
                     add(NavigationItem(ActionType.EDIT_LAST, stringResource(Res.string.edit), Icons.Default.Edit))
                 add(NavigationItem(ActionType.THINK, stringResource(Res.string.think), Icons.Default.Lightbulb))
-                add(NavigationItem(ActionType.MORNING, "Утренний разбор", Icons.Default.QueryStats))
             }
 
             items.forEach { item ->
@@ -196,6 +195,11 @@ fun SideNavigationDrawer(
                         stringResource(Res.string.notes),
                         Icons.Outlined.Inbox,
                         hasNotification = notesNotEmpty))
+                    add(NavigationItem(
+                        ActionType.MORNING,
+                        "Утренний разбор",
+                        Icons.Default.QueryStats
+                    ))
                 }
                 tabs.forEach { tab ->
                     val animatedBgColor by animateColorAsState(

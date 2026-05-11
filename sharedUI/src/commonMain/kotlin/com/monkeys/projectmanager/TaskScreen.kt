@@ -20,10 +20,10 @@ import androidx.compose.ui.unit.sp
 import com.monkeys.projectmanager.models.Task
 import com.monkeys.projectmanager.utils.ActionType
 import com.monkeys.projectmanager.utils.ApiAdapter
-import com.monkeys.projectmanager.utils.ProjectStatus
 import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
+import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -183,8 +183,9 @@ fun showGoTo(
     }
 
     LaunchedEffect(Unit) {
+        val now = Clock.System.now().toEpochMilliseconds()
         offProjectIds = ApiAdapter.getProjects()
-            .filter { it.status == ProjectStatus.OFF }
+            .filter { it.needsTaskSelection(now) }
             .map { it.id }
     }
 

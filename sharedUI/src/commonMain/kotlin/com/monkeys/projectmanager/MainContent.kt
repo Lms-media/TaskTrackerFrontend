@@ -49,7 +49,10 @@ fun MainContent(
         derivedStateOf { notes.isNotEmpty() }
     }
     val hasProjectsWithoutSelectedTask by remember(projects) {
-        derivedStateOf { projects.any { it.status == ProjectStatus.OFF } }
+        derivedStateOf {
+            val now = Clock.System.now().toEpochMilliseconds()
+            projects.any { it.blocksTaskReview(now) }
+        }
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -191,12 +194,20 @@ fun MainContent(
                             onDataChanged = onDataChanged,
                         )
 
+                        ActionType.MORNING -> MorningReviewScreen(
+                            refreshKey = refreshKey,
+                            onGoToTasks = onGoToTasks
+                        )
+
                         else -> {}
                     }
                 }
 
                 ActionType.MORNING -> {
-                    MorningReviewScreen(refreshKey = refreshKey)
+                    MorningReviewScreen(
+                        refreshKey = refreshKey,
+                        onGoToTasks = onGoToTasks
+                    )
                 }
 
                 else -> {}

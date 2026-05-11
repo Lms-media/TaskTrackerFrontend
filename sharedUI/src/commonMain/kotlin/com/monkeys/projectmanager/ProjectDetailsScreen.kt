@@ -30,11 +30,13 @@ import com.monkeys.projectmanager.models.Mark
 import com.monkeys.projectmanager.models.Project
 import com.monkeys.projectmanager.models.Task
 import com.monkeys.projectmanager.utils.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import monkeys_pm.sharedui.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 import kotlin.collections.emptyList
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -51,24 +53,41 @@ fun ProjectDetailsScreen(
     onProjectChanged: suspend () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
+    var now by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Clock.System.now().toEpochMilliseconds()
+            delay(1_000L.milliseconds)
+        }
+    }
 
     val tasks by remember(project) {
         derivedStateOf { project.tasks }
     }
 
-    val hasActiveTask by remember(project) {
+    val hasSelectedTask by remember(project) {
         derivedStateOf {
-            tasks.any {
-                it.wave == WaveStatus.ACTIVE &&
-                        (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
+            project.hasSelectedWaveTask()
+        }
+    }
+    val activeBlockTask by remember(project, now) {
+        derivedStateOf {
+            tasks.find {
+                it.status == TaskStatus.BLOCKED && it.blockedUntil > now
             }
         }
     }
-    val activeBlockTask by remember(project) {
+    val expiredBlockTask by remember(project, now) {
         derivedStateOf {
-            tasks.find {
-                it.status == TaskStatus.BLOCKED && it.blockedUntil > Clock.System.now().toEpochMilliseconds()
-            }
+            tasks
+                .filter { it.status == TaskStatus.BLOCKED && it.blockedUntil <= now }
+                .maxByOrNull { it.createdDate }
+        }
+    }
+    val blockInfoTask by remember(project, activeBlockTask?.id, expiredBlockTask?.id) {
+        derivedStateOf {
+            if (activeBlockTask == null) expiredBlockTask else null
         }
     }
     val lastTask by remember(project) {
@@ -77,14 +96,23 @@ fun ProjectDetailsScreen(
         }
     }
     var showBlockInfo by remember {
-        mutableStateOf(project.status == ProjectStatus.OFF_FROM_BLOCK && lastTask != null)
+        mutableStateOf(false)
     }
     var dismissedBlockInfoTaskId by remember(project.id) { mutableStateOf<Uuid?>(null) }
-    LaunchedEffect(project.status, lastTask?.id, activeBlockTask?.id, dismissedBlockInfoTaskId) {
+    var wasOpenedWithActiveBlock by remember(project.id) { mutableStateOf(activeBlockTask != null) }
+    LaunchedEffect(project.status, activeBlockTask?.id, blockInfoTask?.id, dismissedBlockInfoTaskId) {
         showBlockInfo = project.status == ProjectStatus.OFF_FROM_BLOCK &&
                 activeBlockTask == null &&
-                lastTask != null &&
-                lastTask!!.id != dismissedBlockInfoTaskId
+                blockInfoTask != null &&
+                blockInfoTask!!.id != dismissedBlockInfoTaskId
+    }
+    LaunchedEffect(activeBlockTask?.id) {
+        if (activeBlockTask != null) {
+            wasOpenedWithActiveBlock = true
+        } else if (simpleMode && wasOpenedWithActiveBlock) {
+            wasOpenedWithActiveBlock = false
+            onBack()
+        }
     }
 
     var createTask by remember { mutableStateOf(false) }
@@ -124,12 +152,13 @@ fun ProjectDetailsScreen(
     suspend fun chooseTargetWave(): WaveStatus {
         val allProjects = ApiAdapter.getProjects()
         val allTasks = ApiAdapter.getTasks()
-        val offProjectsCount = allProjects.count { it.status == ProjectStatus.OFF }
+        val nowForWave = Clock.System.now().toEpochMilliseconds()
+        val projectsBlockingTaskReview = allProjects.count { it.blocksTaskReview(nowForWave) }
         val isWaveAlreadyActive = allTasks.any {
             it.wave == WaveStatus.ACTIVE && (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
         }
 
-        val targetWave = if (!isWaveAlreadyActive && offProjectsCount <= 1) {
+        val targetWave = if (!isWaveAlreadyActive && projectsBlockingTaskReview <= 1) {
             WaveStatus.ACTIVE
         } else {
             WaveStatus.WAITING
@@ -153,8 +182,9 @@ fun ProjectDetailsScreen(
     suspend fun finishTaskSelection() {
         onProjectChanged()
         if (showAllProjects) {
+            val currentTime = Clock.System.now().toEpochMilliseconds()
             val nextProject = ApiAdapter.getProjects()
-                .find { it.status == ProjectStatus.OFF }
+                .find { it.needsTaskSelection(currentTime) }
             if (nextProject != null) {
                 onBack()
                 onClickGoTo(ActionType.PROJECTS, nextProject.id, true)
@@ -170,7 +200,7 @@ fun ProjectDetailsScreen(
                 .fillMaxSize()
                 .background(Color(0xFFF5F5F5))
                 .verticalScroll(scrollState)
-                .blur(if (activeBlockTask != null) 12.dp else 0.dp),
+                .blur(if (project.status == ProjectStatus.OFF_FROM_BLOCK && activeBlockTask != null) 12.dp else 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(
@@ -192,7 +222,7 @@ fun ProjectDetailsScreen(
                         contentDescription = stringResource(Res.string.back),
                     )
                 }
-                if (!hasActiveTask)
+                if (!hasSelectedTask)
                     Text(
                         text = stringResource(Res.string.no_project_full),
                         color = Color.Red,
@@ -252,7 +282,7 @@ fun ProjectDetailsScreen(
                     icon = Icons.Default.Add,
                     text = "Выбрать задачу",
                     modifier = Modifier.weight(1f),
-                    enabled = !hasActiveTask,
+                    enabled = !hasSelectedTask,
                     onClick = {
                         chooseTask = true
                     }
@@ -275,7 +305,7 @@ fun ProjectDetailsScreen(
                     icon = Icons.Outlined.AccessTime,
                     text = stringResource(Res.string.block),
                     modifier = Modifier.weight(1f),
-                    enabled = !hasActiveTask,
+                    enabled = !hasSelectedTask,
                     onClick = {
                         createBlockTask = true
                     }
@@ -322,7 +352,7 @@ fun ProjectDetailsScreen(
             }
         }
 
-        if (activeBlockTask != null) {
+        if (project.status == ProjectStatus.OFF_FROM_BLOCK && activeBlockTask != null) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = Color.Black.copy(alpha = 0.3f)
@@ -448,14 +478,14 @@ fun ProjectDetailsScreen(
         )
     }
 
-    if (showBlockInfo && lastTask != null) {
+    if (showBlockInfo && blockInfoTask != null) {
         AlertDialog(
             onDismissRequest = { showBlockInfo = false },
             shape = RoundedCornerShape(28.dp),
             containerColor = Color.White,
             title = {
                 Text(
-                    text = lastTask!!.title,
+                    text = blockInfoTask!!.title,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
@@ -463,13 +493,13 @@ fun ProjectDetailsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = lastTask!!.description,
+                        text = blockInfoTask!!.description,
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
                         text = stringResource(
                             Res.string.blocked_task_from,
-                            formatTime(lastTask!!.createdDate)
+                            formatTime(blockInfoTask!!.createdDate)
                         ),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.Gray
@@ -480,7 +510,7 @@ fun ProjectDetailsScreen(
                 Button(
                     onClick = {
                         scope.launch {
-                            dismissedBlockInfoTaskId = lastTask!!.id
+                            dismissedBlockInfoTaskId = blockInfoTask!!.id
                             project.status = ProjectStatus.OFF
                             ApiAdapter.editProject(project)
                             onProjectChanged()
@@ -495,7 +525,7 @@ fun ProjectDetailsScreen(
             dismissButton = {
                 TextButton(
                     onClick = {
-                        dismissedBlockInfoTaskId = lastTask!!.id
+                        dismissedBlockInfoTaskId = blockInfoTask!!.id
                         showBlockInfo = false
                         onBack()
                     }
