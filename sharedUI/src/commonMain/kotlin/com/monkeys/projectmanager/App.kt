@@ -24,7 +24,15 @@ fun App(
     var selectedNoteId by remember { mutableStateOf<Uuid?>(null) }
     var showAllProjects by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableStateOf(0) }
+    var simpleMode by remember { mutableStateOf(true) }
     val requestRefresh = { refreshKey += 1 }
+
+    if (simpleMode) {
+        SimpleFlowScreen(
+            onSwitchToAdvanced = { simpleMode = false }
+        )
+        return@AppTheme
+    }
 
     Row(Modifier.fillMaxSize()) {
         SideNavigationDrawer(
@@ -38,6 +46,7 @@ fun App(
                 selectedItem = item },
             onTabClick = { selectedTab = it },
             onToggle = { isExpanded = !isExpanded },
+            onSwitchToSimple = { simpleMode = true },
             onDataChanged = requestRefresh
         )
 
@@ -61,6 +70,13 @@ fun App(
                 showAllProjects = false
             },
             showAllProjects = showAllProjects,
+            onGoToTasks = {
+                selectedItem = ActionType.GET_TASK
+                selectedTab = ActionType.ENUM_END
+                selectedProjId = null
+                selectedNoteId = null
+                showAllProjects = false
+            },
             onDataChanged = requestRefresh
         )
     }

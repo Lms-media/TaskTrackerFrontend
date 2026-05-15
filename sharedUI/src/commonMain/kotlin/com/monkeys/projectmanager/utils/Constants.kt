@@ -15,7 +15,8 @@ enum class TaskStatus {
 
 enum class WaveStatus {
     ACTIVE,
-    WAITING
+    WAITING,
+    BACKLOG
 }
 /* WaveStatus in HTTP API
 * 0 - ACTIVE
@@ -38,6 +39,7 @@ enum class ActionType {
     THINK,
     NOTES,
     PROJECTS,
+    MORNING,
     ENUM_END
 }
 /* ActionType in HTTP API

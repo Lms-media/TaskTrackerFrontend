@@ -110,8 +110,10 @@ fun DeleteHoldButton(
 @Composable
 fun NotesScreen(
     onProjectCreate: (Uuid) -> Unit,
+    onGoToProjects: () -> Unit,
     refreshKey: Int,
     onDataChanged: () -> Unit,
+    showGoToProjectsOnlyWhenEmpty: Boolean = false,
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
@@ -130,7 +132,7 @@ fun NotesScreen(
             .padding(vertical = 10.dp)
     ) {
         if (notes.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(stringResource(Res.string.no_notes), color = Color.Gray, fontSize = 18.sp)
             }
         } else {
@@ -256,6 +258,24 @@ fun NotesScreen(
                 }
             }
         }
+
+        if (!showGoToProjectsOnlyWhenEmpty || notes.isEmpty()) {
+            ElevatedButton(
+                modifier = Modifier
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .height(52.dp)
+                    .fillMaxWidth(),
+                onClick = onGoToProjects,
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = Color(0xFF3B2D60),
+                    contentColor = Color.White
+                )
+            ) {
+                Icon(Icons.Default.CreateNewFolder, contentDescription = null, tint = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("Перейти к проектам", color = Color.White, maxLines = 1)
+            }
+        }
     }
 
     if (showDialog) {
@@ -267,7 +287,6 @@ fun NotesScreen(
                 scope.launch {
                     val projId = ApiAdapter.createProject(name, desc)
                     showDialog = false
-                    onDataChanged()
                     onProjectCreate(projId)
                 }
             },

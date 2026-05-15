@@ -30,10 +30,12 @@ fun MainContent(
     projectId: Uuid? = null,
     noteId: Uuid? = null,
     onClickGoTo: (ActionType, Uuid?, Boolean) -> Unit,
+    onGoToTasks: () -> Unit,
     onDataChanged: () -> Unit,
 ) {
     var tasks by remember { mutableStateOf<List<Task>>(emptyList()) }
     var notes by remember { mutableStateOf<List<Note>>(emptyList()) }
+    var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
 
     val activeTasks by remember(tasks) {
         derivedStateOf {
@@ -41,6 +43,15 @@ fun MainContent(
                 (it.status == TaskStatus.ACTIVE || it.status == TaskStatus.ACTIVE_CURRENT)
                         && it.wave == WaveStatus.ACTIVE
             }
+        }
+    }
+    val hasNotes by remember(notes) {
+        derivedStateOf { notes.isNotEmpty() }
+    }
+    val hasProjectsWithoutSelectedTask by remember(projects) {
+        derivedStateOf {
+            val now = Clock.System.now().toEpochMilliseconds()
+            projects.any { it.blocksTaskReview(now) }
         }
     }
 
@@ -51,6 +62,7 @@ fun MainContent(
     LaunchedEffect(refreshKey) {
         tasks = ApiAdapter.getTasks()
         notes = ApiAdapter.getNotes()
+        projects = ApiAdapter.getProjects()
     }
 
     LaunchedEffect(Unit) {
@@ -65,6 +77,7 @@ fun MainContent(
                 }
 
             tasks = ApiAdapter.getTasks()
+            projects = ApiAdapter.getProjects()
 
             delay(30_000L.milliseconds)
         }
@@ -83,10 +96,18 @@ fun MainContent(
         ) { (targetItem, targetTab) ->
             when (targetItem) {
                 ActionType.GET_TASK -> {
-                    val currentTask = remember(activeTasks) {
-                        activeTasks.find { it.status == TaskStatus.ACTIVE_CURRENT }
-                            ?: activeTasks.randomOrNull()
+                    if (activeTasks.isEmpty() && hasNotes) {
+                        showGoToNotes { onClickGoTo(ActionType.NOTES, null, false) }
+                        return@AnimatedContent
                     }
+
+                    if (activeTasks.isEmpty() && hasProjectsWithoutSelectedTask) {
+                        showGoTo(onClickGoTo)
+                        return@AnimatedContent
+                    }
+
+                    val currentTask = activeTasks.find { it.status == TaskStatus.ACTIVE_CURRENT }
+                        ?: activeTasks.minByOrNull { it.createdDate }
                     LaunchedEffect(currentTask?.id) {
                         if (currentTask != null && currentTask.status != TaskStatus.ACTIVE_CURRENT) {
                             currentTask.status = TaskStatus.ACTIVE_CURRENT
@@ -109,6 +130,7 @@ fun MainContent(
                                 onTaskChanged = {
                                     tasks = ApiAdapter.getTasks()
                                     notes = ApiAdapter.getNotes()
+                                    projects = ApiAdapter.getProjects()
                                     onDataChanged()
                                 }
                             )
@@ -138,7 +160,11 @@ fun MainContent(
                         )
                     } else {
                         NotesScreen(
-                            onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
+                            onProjectCreate = {
+                                onDataChanged()
+                                onClickGoTo(ActionType.PROJECTS, it, false)
+                            },
+                            onGoToProjects = { onClickGoTo(ActionType.PROJECTS, null, false) },
                             refreshKey = refreshKey,
                             onDataChanged = onDataChanged,
                         )
@@ -154,17 +180,34 @@ fun MainContent(
                             showAllProjects = showAllProjects,
                             refreshKey = refreshKey,
                             onClickGoTo = onClickGoTo,
+                            onGoToTasks = onGoToTasks,
                             onDataChanged = onDataChanged,
                         )
 
                         ActionType.NOTES -> NotesScreen(
-                            onProjectCreate = { onClickGoTo(ActionType.PROJECTS, it, false) },
+                            onProjectCreate = {
+                                onDataChanged()
+                                onClickGoTo(ActionType.PROJECTS, it, false)
+                            },
+                            onGoToProjects = { onClickGoTo(ActionType.PROJECTS, null, false) },
                             refreshKey = refreshKey,
                             onDataChanged = onDataChanged,
                         )
 
+                        ActionType.MORNING -> MorningReviewScreen(
+                            refreshKey = refreshKey,
+                            onGoToTasks = onGoToTasks
+                        )
+
                         else -> {}
                     }
+                }
+
+                ActionType.MORNING -> {
+                    MorningReviewScreen(
+                        refreshKey = refreshKey,
+                        onGoToTasks = onGoToTasks
+                    )
                 }
 
                 else -> {}

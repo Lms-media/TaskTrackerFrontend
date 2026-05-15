@@ -43,6 +43,7 @@ fun SideNavigationDrawer(
     onItemClick: (ActionType, Uuid?) -> Unit,
     onTabClick: (ActionType) -> Unit,
     onToggle: () -> Unit,
+    onSwitchToSimple: () -> Unit,
     onDataChanged: () -> Unit
 ) {
     var currentTime by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
@@ -116,10 +117,10 @@ fun SideNavigationDrawer(
             val notesNotEmpty by remember {
                 derivedStateOf { notes.isNotEmpty() }
             }
-            val hasOffProjects by remember {
-                derivedStateOf { projects.any {
-                    it.status == ProjectStatus.OFF || it.status == ProjectStatus.OFF_FROM_BLOCK
-                } }
+            val hasOffProjects by remember(projects, currentTime) {
+                derivedStateOf {
+                    projects.any { it.needsTaskSelection(currentTime) }
+                }
             }
             val canEditNote by remember {
                 derivedStateOf {
@@ -194,6 +195,11 @@ fun SideNavigationDrawer(
                         stringResource(Res.string.notes),
                         Icons.Outlined.Inbox,
                         hasNotification = notesNotEmpty))
+                    add(NavigationItem(
+                        ActionType.MORNING,
+                        "Утренний разбор",
+                        Icons.Default.QueryStats
+                    ))
                 }
                 tabs.forEach { tab ->
                     val animatedBgColor by animateColorAsState(
@@ -217,7 +223,19 @@ fun SideNavigationDrawer(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.weight(1f))
+
+            ModeHoldButton(
+                icon = Icons.Default.Face,
+                title = "Обезьяна",
+                isExpanded = isExpanded,
+                onSwitch = onSwitchToSimple,
+                modifier = Modifier
+                    .padding(top = 4.dp, bottom = 12.dp, end = 8.dp)
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(bottomEnd = 100.dp, topEnd = 100.dp))
+            )
         }
     }
 
